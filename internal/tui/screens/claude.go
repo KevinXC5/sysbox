@@ -40,8 +40,9 @@ type (
 	claudeProxyMsg struct{ proxy, note string }
 	claudeEventMsg claudeupdate.Event
 	claudeDoneMsg  struct {
-		res claudeupdate.Result
-		err error
+		res     claudeupdate.Result
+		err     error
+		elapsed time.Duration
 	}
 )
 
@@ -68,7 +69,7 @@ type claudePage struct {
 	lastN   int64
 	result  claudeupdate.Result
 	err     error
-	started time.Time
+	elapsed time.Duration // 安装结束时固定的实际用时
 }
 
 // NewClaude 创建 Claude Code 更新页
@@ -119,6 +120,10 @@ func (m *claudePage) target() string {
 func (m *claudePage) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
+		// 代理检测和安装结束后停止动画计时，避免空闲页面继续刷新。
+		if m.proxyReady && m.state != claudeRunning {
+			return nil
+		}
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		return cmd
@@ -128,7 +133,7 @@ func (m *claudePage) Update(msg tea.Msg) tea.Cmd {
 		m.onEvent(claudeupdate.Event(msg))
 		return m.wait()
 	case claudeDoneMsg:
-		m.result, m.err = msg.res, msg.err
+		m.result, m.err, m.elapsed = msg.res, msg.err, msg.elapsed
 		m.state = claudeDone
 		if msg.err != nil {
 			m.state = claudeFailed
@@ -198,7 +203,9 @@ func (m *claudePage) start() tea.Cmd {
 	m.input.Blur()
 	m.state, m.logs, m.err = claudeRunning, nil, nil
 	m.done, m.total, m.speed, m.lastN = 0, 0, 0, 0
-	m.started, m.lastAt = time.Now(), time.Now()
+	m.elapsed = 0
+	m.lastAt = time.Now()
+	started := m.lastAt
 	m.ch = make(chan tea.Msg, 64)
 
 	opt := claudeupdate.Defaults(m.home, m.proxy)
@@ -207,7 +214,8 @@ func (m *claudePage) start() tea.Cmd {
 	go func() {
 		u := claudeupdate.New(opt, func(e claudeupdate.Event) { ch <- claudeEventMsg(e) })
 		res, err := u.Run(context.Background(), target)
-		ch <- claudeDoneMsg{res, err}
+		// 在后台任务真正结束时固定用时，不包含界面停留和消息处理时间。
+		ch <- claudeDoneMsg{res: res, err: err, elapsed: time.Since(started)}
 		close(ch)
 	}()
 	return tea.Batch(m.spin.Tick, m.wait())
@@ -370,7 +378,7 @@ func (m *claudePage) viewRun(iw, h int) string {
 	case claudeDone:
 		pct = 1
 		title = theme.Fg(theme.Green).Bold(true).Render("✓ ") + theme.BoldStyle.Render(m.doneTitle())
-		right = theme.MutedStyle.Render(fmt.Sprintf("用时 %.1f 秒", time.Since(m.started).Seconds()))
+		right = theme.MutedStyle.Render(fmt.Sprintf("用时 %.1f 秒", m.elapsed.Seconds()))
 	case claudeFailed:
 		title = theme.Fg(theme.Rose).Bold(true).Render("✗ 更新失败")
 		right = theme.MutedStyle.Render("已下载的部分会保留，重试时接着下载")
