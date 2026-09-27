@@ -1,8 +1,12 @@
+
+
+
+
 # sysbox
 
 个人 macOS 维护工具箱：把零散的清理、进程治理和工具更新脚本收进一个终端界面。
 
-[![sysbox 宣传视频（点击播放）](docs/promo/poster.png)](docs/promo/sysbox-promo.mp4)
+https://github.com/user-attachments/assets/eaf42703-ec6b-4a27-bca4-f989d6cfa4c9
 
 ## 功能
 
