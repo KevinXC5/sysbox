@@ -10,6 +10,11 @@ on:
       - "docs/**"
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "测试通过后发布新版本"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -35,16 +40,29 @@ jobs:
 
   release:
     needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # 跳过发布时仍执行测试；手动运行可独立选择是否发布。
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'push' && vars.AUTO_RELEASE != 'false' &&
+      !contains(github.event.head_commit.message, '[skip release]')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish))
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: 计算版本号
         id: version
         run: echo "tag=v$(tr -d '[:space:]' < VERSION).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - name: 生成更新日志
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')
+          bash scripts/release-notes.sh "$GITHUB_SHA" "$previous" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/release-notes.md"
       - name: 编译
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -65,5 +83,5 @@ jobs:
           gh release create "$TAG" dist/* \
             --title "$TAG" \
             --target "$GITHUB_SHA" \
-            --generate-notes \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
             --latest
