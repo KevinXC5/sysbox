@@ -37,7 +37,12 @@ func Header(w int, crumbs []string, info HeaderInfo) string {
 
 	var right []string
 	if info.NewVersion != "" {
-		right = append(right, theme.Fg(theme.Green).Bold(true).Render("↑ "+info.NewVersion+" 可升级"))
+		hint := "按 U 升级"
+		// 升级入口位于首页，工具页提示先返回，避免打断正在执行的操作。
+		if len(crumbs) > 0 {
+			hint = "回首页按 U 升级"
+		}
+		right = append(right, theme.Fg(theme.Green).Bold(true).Render("↑ "+info.NewVersion+" 可升级 · "+hint))
 	}
 	if info.DryRun {
 		right = append(right, theme.Badge("演练模式", theme.Amber))

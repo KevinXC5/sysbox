@@ -70,7 +70,7 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 			m.cursor = (m.cursor + 1) % len(m.tools)
 		case "q", "esc":
 			return tea.Quit
-		case "u":
+		case "u", "U":
 			if m.newVersion != "" {
 				return Open(SelfUpdateID)
 			}
@@ -86,7 +86,7 @@ func (m *Home) Crumbs() []string { return nil }
 func (m *Home) Hints() []string {
 	hints := []string{"↑↓", "选择", "enter", "打开"}
 	if m.newVersion != "" {
-		hints = append(hints, "u", "升级")
+		hints = append(hints, "U", "升级")
 	}
 	return append(hints, "t", "主题", "q", "退出")
 }
