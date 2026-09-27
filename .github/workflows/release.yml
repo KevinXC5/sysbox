@@ -1,0 +1,69 @@
+# 推送到 main 时自动测试、编译并发布新版本；只改文档不会触发发布。
+# 版本号 = VERSION 文件中的主次版本号 + 本工作流的运行序号，例如 v0.1.23。
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 检查格式
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: 静态检查
+        run: go vet ./...
+      - name: 测试
+        run: go test -race ./...
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 计算版本号
+        id: version
+        run: echo "tag=v$(tr -d '[:space:]' < VERSION).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - name: 编译
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          mkdir -p dist
+          for arch in arm64 amd64; do
+            CGO_ENABLED=0 GOOS=darwin GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X github.com/KevinXC5/sysbox/internal/meta.Version=$TAG" \
+              -o "dist/sysbox-darwin-$arch" ./cmd/sysbox
+          done
+          (cd dist && shasum -a 256 sysbox-darwin-* > checksums.txt)
+          cat dist/checksums.txt
+      - name: 发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
+            --target "$GITHUB_SHA" \
+            --generate-notes \
+            --latest

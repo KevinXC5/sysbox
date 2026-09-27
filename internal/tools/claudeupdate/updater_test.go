@@ -1,0 +1,342 @@
+package claudeupdate
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+const testVersion = "2.1.999"
+
+// installScript 模拟官方安装子命令：校验参数，成功后建立启动链接
+const installScript = `#!/bin/bash
+[[ "$1" == install && "$2" == 2.1.999 ]] || exit 20
+[[ -z "${TEST_EXPECT_DIRECT:-}" || -z "${HTTPS_PROXY:-}" ]] || exit 19
+[[ -z "${TEST_INSTALL_SLEEP:-}" ]] || sleep "$TEST_INSTALL_SLEEP"
+[[ "${TEST_INSTALL_STATUS:-0}" == 0 ]] || exit "$TEST_INSTALL_STATUS"
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$0" "$HOME/.local/bin/claude"
+`
+
+// fakeRelease 模拟发布服务，可注入各种网络故障
+type fakeRelease struct {
+	mu          sync.Mutex
+	payload     []byte
+	served      []byte // 实际下发的二进制，默认等于 payload
+	dropOnce    bool   // 第一次下载发送一半后断开
+	ignoreRange bool   // 不支持续传，总是返回完整内容
+	failOnce    int    // 第一次下载返回该状态码
+	binaryHits  int
+}
+
+func (f *fakeRelease) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch {
+	case strings.HasSuffix(r.URL.Path, "/latest"), strings.HasSuffix(r.URL.Path, "/stable"):
+		fmt.Fprintln(w, testVersion)
+	case strings.HasSuffix(r.URL.Path, "/manifest.json"):
+		sum := sha256.Sum256(f.payload)
+		fmt.Fprintf(w, `{"platforms":{"darwin-arm64":{"checksum":%q}}}`, hex.EncodeToString(sum[:]))
+	case strings.HasSuffix(r.URL.Path, "/darwin-arm64/claude"):
+		f.binaryHits++
+		f.serveBinary(w, r)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (f *fakeRelease) serveBinary(w http.ResponseWriter, r *http.Request) {
+	data := f.served
+	if data == nil {
+		data = f.payload
+	}
+	if f.failOnce != 0 {
+		code := f.failOnce
+		f.failOnce = 0
+		w.WriteHeader(code)
+		return
+	}
+	if f.dropOnce {
+		f.dropOnce = false
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data[:len(data)/2])
+		// 劫持连接直接关闭，模拟中途断线
+		if hj, ok := w.(http.Hijacker); ok {
+			if conn, _, err := hj.Hijack(); err == nil {
+				_ = conn.Close()
+			}
+		}
+		return
+	}
+	start := 0
+	if rg := r.Header.Get("Range"); rg != "" && !f.ignoreRange {
+		start, _ = strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(rg, "bytes="), "-"))
+		if start >= len(data) {
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(data)-1, len(data)))
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)-start))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(data[start:])
+		return
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
+}
+
+type harness struct {
+	t    *testing.T
+	home string
+	srv  *fakeRelease
+	url  string
+	logs []string
+	opts Options
+}
+
+func newHarness(t *testing.T) *harness {
+	t.Helper()
+	h := &harness{t: t, home: t.TempDir(), srv: &fakeRelease{payload: []byte(installScript)}}
+	ts := httptest.NewServer(h.srv)
+	t.Cleanup(ts.Close)
+	h.url = ts.URL
+	h.opts = Options{
+		BaseURL: ts.URL, Home: h.home, Platform: "darwin-arm64",
+		Attempts: 11, RetryDelay: time.Millisecond,
+		StallWindow: 5 * time.Second, StallBytes: 1, InstallTimeout: 10 * time.Second,
+	}
+	return h
+}
+
+func (h *harness) run(target string) (Result, error) {
+	u := New(h.opts, func(e Event) {
+		if e.Msg != "" {
+			h.logs = append(h.logs, e.Msg)
+		}
+	})
+	return u.Run(context.Background(), target)
+}
+
+func (h *harness) log() string { return strings.Join(h.logs, "\n") }
+
+func (h *harness) versionFile() string {
+	return filepath.Join(h.home, ".local/share/claude/versions", testVersion)
+}
+
+func (h *harness) link() string { return filepath.Join(h.home, ".local/bin/claude") }
+
+// oldInstall 预置一个旧版本并让链接指向它
+func (h *harness) oldInstall() string {
+	h.t.Helper()
+	old := filepath.Join(h.home, ".local/share/claude/versions/2.1.1")
+	if err := os.MkdirAll(filepath.Dir(old), 0o755); err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.WriteFile(old, []byte("#!/bin/bash\n"), 0o755); err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(h.link()), 0o755); err != nil {
+		h.t.Fatal(err)
+	}
+	if err := os.Symlink(old, h.link()); err != nil {
+		h.t.Fatal(err)
+	}
+	return old
+}
+
+// assertKeptOld 失败时旧版本链接保持不变
+func (h *harness) assertKeptOld(err error, old string) {
+	h.t.Helper()
+	if err == nil {
+		h.t.Fatal("期望失败，实际成功")
+	}
+	if target, _ := os.Readlink(h.link()); target != old {
+		h.t.Errorf("链接被切换到了 %s", target)
+	}
+}
+
+func TestSuccessThenCached(t *testing.T) {
+	h := newHarness(t)
+	res, err := h.run("latest")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if target, _ := os.Readlink(h.link()); target != h.versionFile() || res.Cached {
+		t.Fatalf("安装结果有误：link=%s res=%+v", target, res)
+	}
+	res, err = h.run(testVersion)
+	if err != nil || !res.Cached {
+		t.Fatalf("第二次应复用本地文件：%+v %v", res, err)
+	}
+	if h.srv.binaryHits != 1 {
+		t.Errorf("二进制只应下载一次，实际 %d 次", h.srv.binaryHits)
+	}
+}
+
+func TestBadChecksumKeepsOld(t *testing.T) {
+	h := newHarness(t)
+	old := h.oldInstall()
+	h.srv.served = []byte("bad data")
+	_, err := h.run("latest")
+	h.assertKeptOld(err, old)
+	if !strings.Contains(err.Error(), "SHA-256") {
+		t.Errorf("错误信息应说明校验失败：%v", err)
+	}
+	if _, statErr := os.Stat(h.versionFile()); !os.IsNotExist(statErr) {
+		t.Error("校验失败的文件不应进入版本目录")
+	}
+}
+
+func TestInstallFailureReported(t *testing.T) {
+	h := newHarness(t)
+	old := h.oldInstall()
+	t.Setenv("TEST_INSTALL_STATUS", "7")
+	_, err := h.run("latest")
+	h.assertKeptOld(err, old)
+	if !strings.Contains(err.Error(), "退出码：7") {
+		t.Errorf("应报告退出码：%v", err)
+	}
+}
+
+func TestInstallTimeout(t *testing.T) {
+	h := newHarness(t)
+	old := h.oldInstall()
+	h.opts.InstallTimeout = 500 * time.Millisecond
+	t.Setenv("TEST_INSTALL_SLEEP", "5")
+	_, err := h.run("latest")
+	h.assertKeptOld(err, old)
+	if !strings.Contains(err.Error(), "安装超时") {
+		t.Errorf("应报告超时：%v", err)
+	}
+	if _, statErr := os.Stat(h.versionFile()); statErr != nil {
+		t.Error("超时后已下载的文件应保留，供下次复用")
+	}
+}
+
+func TestResumeAfterDisconnect(t *testing.T) {
+	h := newHarness(t)
+	h.srv.dropOnce = true
+	if _, err := h.run("latest"); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if !strings.Contains(h.log(), "第 2/11 次尝试") {
+		t.Errorf("应在第二次尝试时续传完成：\n%s", h.log())
+	}
+	got, _ := os.ReadFile(h.versionFile())
+	if string(got) != installScript {
+		t.Error("续传后的文件内容不一致")
+	}
+}
+
+// 服务器不支持续传时，同一次尝试内改为从头下载
+func TestRangeIgnoredRestartsInPlace(t *testing.T) {
+	h := newHarness(t)
+	part := filepath.Join(h.home, ".local/share/claude/update-cache", testVersion+"-darwin-arm64.part")
+	if err := os.MkdirAll(filepath.Dir(part), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(part, []byte("partial"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.srv.ignoreRange = true
+	if _, err := h.run("latest"); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if !strings.Contains(h.log(), "服务器不支持续传") || h.srv.binaryHits != 1 {
+		t.Errorf("应在同一次请求内从头下载：hits=%d\n%s", h.srv.binaryHits, h.log())
+	}
+}
+
+func TestTransientHTTPRetried(t *testing.T) {
+	h := newHarness(t)
+	h.srv.failOnce = http.StatusServiceUnavailable
+	if _, err := h.run("latest"); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if !strings.Contains(h.log(), "HTTP 503") {
+		t.Errorf("应记录 503 并重试：\n%s", h.log())
+	}
+}
+
+func TestRangeNotSatisfiableRestarts(t *testing.T) {
+	h := newHarness(t)
+	h.srv.failOnce = http.StatusRequestedRangeNotSatisfiable
+	if _, err := h.run("latest"); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if !strings.Contains(h.log(), "缓存超出远端范围") {
+		t.Errorf("应提示从头下载：\n%s", h.log())
+	}
+}
+
+// 所有尝试都失败时报错，旧版本保持不变
+func TestPersistentFailureKeepsOld(t *testing.T) {
+	h := newHarness(t)
+	old := h.oldInstall()
+	h.opts.Attempts = 1
+	h.srv.failOnce = http.StatusBadGateway
+	_, err := h.run("latest")
+	h.assertKeptOld(err, old)
+	if !strings.Contains(err.Error(), "已保留续传缓存") {
+		t.Errorf("应提示保留了缓存：%v", err)
+	}
+}
+
+// 直连模式下不继承环境里的代理，安装子命令也拿不到代理变量
+func TestDirectIgnoresInheritedProxy(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:1")
+	t.Setenv("TEST_EXPECT_DIRECT", "1")
+	if _, err := h.run("latest"); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+}
+
+func TestInvalidTargets(t *testing.T) {
+	h := newHarness(t)
+	for _, target := range []string{"2.1.186/../../x", "--unknown", "", "1.2"} {
+		if _, err := h.run(target); err == nil {
+			t.Errorf("非法目标 %q 应被拒绝", target)
+		}
+	}
+	if h.srv.binaryHits != 0 {
+		t.Error("非法目标不应发起下载")
+	}
+}
+
+func TestDryRunStopsBeforeDownload(t *testing.T) {
+	h := newHarness(t)
+	h.opts.DryRun = true
+	res, err := h.run("latest")
+	if err != nil || res.Version != testVersion {
+		t.Fatalf("演练应解析出版本号：%+v %v", res, err)
+	}
+	if h.srv.binaryHits != 0 {
+		t.Error("演练不应下载二进制")
+	}
+	if _, statErr := os.Stat(h.versionFile()); !os.IsNotExist(statErr) {
+		t.Error("演练不应写入版本目录")
+	}
+}
+
+func TestResolveProxy(t *testing.T) {
+	if p, _ := ResolveProxy("http://127.0.0.1:1", false); p != "" {
+		t.Error("代理不可用时应回退为直连")
+	}
+	if p, _ := ResolveProxy("http://127.0.0.1:7890", true); p != "" {
+		t.Error("设置直连时不应使用代理")
+	}
+}
