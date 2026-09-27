@@ -34,15 +34,6 @@ curl -fsSL https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.sh | b
 - 也可以在命令行执行 `sysbox update`
 - 在配置文件中设置 `"update": {"disable_check": true}` 可关闭自动检查
 
-推送到 `main` 分支后，GitHub Actions 默认自动测试、编译并发布新版本；仅在本地提交不会触发。发布说明自动列出上次正式发布以来的提交记录，首次发布列出全部提交。
-
-- 单次跳过发布：在本次推送最后一条提交的说明中加入 `[skip release]`，例如 `fix: 调整配置 [skip release]`。检查和测试仍会执行，变更会纳入下次发布的更新日志。
-- 关闭自动发布：在仓库 Settings → Secrets and variables → Actions → Variables 中新增仓库变量 `AUTO_RELEASE`，值设为 `false`；删除该变量或改为 `true` 即可恢复。
-- 手动发布：在 Actions → release → Run workflow 中选择 `main`，勾选“测试通过后发布新版本”；取消勾选则只检查和测试。手动发布不受 `AUTO_RELEASE` 和 `[skip release]` 限制。
-- 只修改 Markdown 或 `docs/` 时，推送不会触发工作流；PR 只检查和测试，不发布。
-
-版本号由 `VERSION` 文件内容和工作流运行序号组成，例如 `v0.1.12`；跳过发布或运行失败可能导致版本号不连续。
-
 ## 使用
 
 ```bash
@@ -100,45 +91,4 @@ sysbox version         # 显示版本号
 |---|---|
 | ![首页](docs/screenshots/light/01-home.png) | ![JetBrains 缓存](docs/screenshots/light/02-jetbrains.png) |
 
-## 开发
-
-需要 Go 1.26 及以上。
-
-```bash
-make build    # 编译到 bin/sysbox
-make dry      # 演练模式运行
-make test     # 格式检查、静态检查与测试
-make record   # 重新录制截图，依赖 vhs 与 Maple Mono NF CN 字体
-```
-
-### 目录结构
-
-```
-cmd/sysbox/          入口与子命令
-internal/
-  meta/              版本号（构建时注入）与仓库信息
-  config/            用户配置读写
-  fsx/               磁盘占用统计、大小格式化
-  sysx/              系统交互：命令执行、进程查询、launchd、演练执行器
-  cleanup/           “扫描 → 勾选 → 删除”类工具的通用模型
-  selfupdate/        从 GitHub Release 检查与安装新版本
-  tools/             各工具的领域逻辑，不依赖界面，均有单元测试
-    jetbrains/  agentjunk/  appstore/  cursorui/  sangfor/  claudeupdate/  obsidianlink/
-  ui/
-    theme/           配色（浅色、深色两套）、渐变、Logo
-    widget/          顶栏、底栏、面板、弹窗、进度条、步骤日志等组件
-  tui/
-    app.go           根模型：路由、全局按键、顶栏底栏
-    registry.go      工具注册表
-    screens/         页面：首页、通用清理页、通用操作页及各工具页
-scripts/             演示环境与截图录制
-install.sh           安装脚本
-```
-
-### 分层约定
-
-- `tools/` 只包含领域逻辑，通过 `sysx.Runner` 执行命令，测试时替换为 `sysxtest.Runner`
-- 演练模式使用 `sysx.DryRunner`：只读命令照常执行，修改类命令只记录，工具代码无需区分
-- 清理类工具实现 `cleanup.Source` 接口，复用 `screens.NewClean`
-- 查看状态并执行操作的工具实现 `screens.OpsTool`，复用 `screens.NewOps`
-- 新增工具：实现领域逻辑与页面，在 `internal/tui/registry.go` 登记一项即可
+开发与贡献请参阅[开发指南](CONTRIBUTING.md)。
