@@ -1,3 +1,6 @@
 # 编译产物
 /bin/
 /dist/
+
+# Git 独立工作目录
+/.worktrees/
