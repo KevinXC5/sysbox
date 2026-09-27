@@ -38,7 +38,6 @@ type Tool struct {
 	Group  string
 	Name   string
 	Desc   string   // 列表里的一句话简介
-	Origin string   // 迁移来源脚本
 	Detail []string // 详情面板里的功能要点
 	New    func(Env) Page
 }

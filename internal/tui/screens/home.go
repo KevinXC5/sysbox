@@ -179,9 +179,6 @@ func (m *Home) detail(w, h int) string {
 		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top,
 			theme.Fg(theme.Accent).Render("· "), theme.TextStyle.Width(inner-2).Render(d)))
 	}
-	if t.Origin != "" {
-		lines = append(lines, "", widget.Section("来源脚本"), theme.SubtleStyle.Width(inner).Render(t.Origin))
-	}
 	lines = append(lines, "", theme.Key("enter")+" "+theme.Fg(theme.Accent).Render("打开"))
 	return widget.Panel(w, h, theme.Faint, strings.Join(lines, "\n"))
 }

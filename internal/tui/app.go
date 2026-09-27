@@ -23,6 +23,16 @@ const minW, minH = 60, 16
 // newVersionMsg 后台检查到的新版本
 type newVersionMsg struct{ version string }
 
+// systemAppearanceMsg 将后台读取的系统外观交给界面线程处理。
+type systemAppearanceMsg struct{ dark bool }
+
+// watchSystemAppearance 持续检测系统外观，让静止的页面也能自动更新配色。
+func watchSystemAppearance() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return systemAppearanceMsg{dark: theme.SystemDark()}
+	})
+}
+
 // App 根模型
 type App struct {
 	w, h       int
@@ -43,7 +53,7 @@ func New(env screens.Env, start string) *App {
 func (a *App) Restart() bool { return a.restart }
 
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.home.Init(), a.checkUpdate()}
+	cmds := []tea.Cmd{a.home.Init(), a.checkUpdate(), watchSystemAppearance()}
 	if a.start != "" {
 		cmds = append(cmds, screens.Open(a.start))
 	}
@@ -73,6 +83,9 @@ func (a *App) active() screens.Page {
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case systemAppearanceMsg:
+		theme.UpdateSystemAppearance(msg.dark)
+		return a, watchSystemAppearance()
 	case tea.WindowSizeMsg:
 		a.w, a.h = msg.Width, msg.Height
 		return a, nil

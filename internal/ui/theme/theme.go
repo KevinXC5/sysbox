@@ -46,18 +46,20 @@ func ParseMode(s string) (Mode, error) {
 }
 
 var (
-	mode     Mode
-	autoDark = true // 自动模式下判定的结果
+	mode           Mode
+	autoDark       = true // 自动模式下判定的结果
+	lastSystemDark bool   // 上次系统外观，用于保留终端启动时的独立配色
 )
 
 // Setup 初始化主题，必须在 Bubble Tea 接管终端之前调用。
 // 自动模式通过查询终端背景色判定深浅；其他模式下不查询终端，
 // 改用 macOS 外观设置作为之后切回自动模式时的依据。
 func Setup(m Mode) {
+	lastSystemDark = SystemDark()
 	if m == Auto {
 		autoDark = lipgloss.HasDarkBackground()
 	} else {
-		autoDark = systemDark()
+		autoDark = lastSystemDark
 	}
 	SetMode(m)
 }
@@ -85,8 +87,22 @@ func IsDark() bool {
 	return autoDark
 }
 
-// systemDark 读取 macOS 外观设置，浅色模式下该键不存在
-func systemDark() bool {
+// UpdateSystemAppearance 在界面消息循环中同步配色，避免后台检测与渲染并发修改主题。
+// 仅在系统外观发生变化时覆盖启动时的终端判定，固定主题仍保留用户选择。
+func UpdateSystemAppearance(dark bool) {
+	if dark == lastSystemDark {
+		return
+	}
+	lastSystemDark = dark
+	autoDark = dark
+	if mode == Auto {
+		lipgloss.SetHasDarkBackground(dark)
+	}
+}
+
+// SystemDark 读取 macOS 外观设置，浅色模式下该键不存在。
+// 此函数只读取系统状态，可在后台调用。
+func SystemDark() bool {
 	out, err := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle").Output()
 	return err == nil && strings.TrimSpace(string(out)) == "Dark"
 }
