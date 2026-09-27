@@ -34,7 +34,14 @@ curl -fsSL https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.sh | b
 - 也可以在命令行执行 `sysbox update`
 - 在配置文件中设置 `"update": {"disable_check": true}` 可关闭自动检查
 
-每次推送到 main 分支，GitHub Actions 会自动测试、编译并发布新版本。
+推送到 `main` 分支后，GitHub Actions 默认自动测试、编译并发布新版本；仅在本地提交不会触发。发布说明自动列出上次正式发布以来的提交记录，首次发布列出全部提交。
+
+- 单次跳过发布：在本次推送最后一条提交的说明中加入 `[skip release]`，例如 `fix: 调整配置 [skip release]`。检查和测试仍会执行，变更会纳入下次发布的更新日志。
+- 关闭自动发布：在仓库 Settings → Secrets and variables → Actions → Variables 中新增仓库变量 `AUTO_RELEASE`，值设为 `false`；删除该变量或改为 `true` 即可恢复。
+- 手动发布：在 Actions → release → Run workflow 中选择 `main`，勾选“测试通过后发布新版本”；取消勾选则只检查和测试。手动发布不受 `AUTO_RELEASE` 和 `[skip release]` 限制。
+- 只修改 Markdown 或 `docs/` 时，推送不会触发工作流；PR 只检查和测试，不发布。
+
+版本号由 `VERSION` 文件内容和工作流运行序号组成，例如 `v0.1.12`；跳过发布或运行失败可能导致版本号不连续。
 
 ## 使用
 
