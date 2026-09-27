@@ -25,32 +25,32 @@ case "$(uname -m)" in
     if [[ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" == 1 ]]; then arch=arm64; else arch=amd64; fi ;;
   *) die "不支持的架构：$(uname -m)" ;;
 esac
-asset="sysbox-darwin-$arch"
+asset="sysbox-darwin-${arch}"
 
-if [[ "$VERSION" == latest ]]; then
+if [[ "${VERSION}" == latest ]]; then
   base="https://github.com/$REPO/releases/latest/download"
 else
-  base="https://github.com/$REPO/releases/download/$VERSION"
+  base="https://github.com/$REPO/releases/download/${VERSION}"
 fi
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-info "下载 $asset（$VERSION）"
-curl -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset" || die "下载失败：$base/$asset"
-curl -fsSL --retry 3 -o "$tmp/checksums.txt" "$base/checksums.txt" || die "下载校验文件失败"
+info "下载 ${asset}（${VERSION}）"
+curl -fsSL --retry 3 -o "$tmp/${asset}" "${base}/${asset}" || die "下载失败：${base}/${asset}"
+curl -fsSL --retry 3 -o "$tmp/checksums.txt" "${base}/checksums.txt" || die "下载校验文件失败"
 
-want="$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/checksums.txt")"
-got="$(shasum -a 256 "$tmp/$asset" | awk '{ print $1 }')"
-[[ -n "$want" && "$want" == "$got" ]] || die "SHA-256 校验失败，未安装"
+want="$(awk -v f="${asset}" '$2 == f { print $1 }' "$tmp/checksums.txt")"
+got="$(shasum -a 256 "$tmp/${asset}" | awk '{ print $1 }')"
+[[ -n "${want}" && "${want}" == "${got}" ]] || die "SHA-256 校验失败，未安装"
 ok "校验通过"
 
-mkdir -p "$INSTALL_DIR"
-chmod 755 "$tmp/$asset"
-mv -f "$tmp/$asset" "$INSTALL_DIR/sysbox"
-ok "已安装 $("$INSTALL_DIR/sysbox" version) 到 $INSTALL_DIR/sysbox"
+mkdir -p "${INSTALL_DIR}"
+chmod 755 "$tmp/${asset}"
+mv -f "$tmp/${asset}" "${INSTALL_DIR}/sysbox"
+ok "已安装 $("${INSTALL_DIR}/sysbox" version) 到 ${INSTALL_DIR}/sysbox"
 
 case ":$PATH:" in
-  *":$INSTALL_DIR:"*) ;;
-  *) printf '\n把下面这行加入 ~/.zshrc 后重新打开终端：\n  export PATH="%s:$PATH"\n' "$INSTALL_DIR" ;;
+  *":${INSTALL_DIR}:"*) ;;
+  *) printf '\n把下面这行加入 ~/.zshrc 后重新打开终端：\n  export PATH="%s:$PATH"\n' "${INSTALL_DIR}" ;;
 esac
