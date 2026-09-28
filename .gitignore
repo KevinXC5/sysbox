@@ -4,3 +4,6 @@
 
 # Git 独立工作目录
 /.worktrees/
+
+# Claude Code 子代理工作目录
+/.claude/worktrees/
