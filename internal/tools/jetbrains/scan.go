@@ -28,7 +28,7 @@ var categories = []cleanup.Category{
 }
 
 // Options 扫描与删除的根路径。
-// LogInsideCache 为真时日志在各产品缓存目录的 log 子目录里（Windows、Linux），
+// LogInsideCache 为真时日志在各产品缓存目录的 log 子目录里（Windows），
 // 为假时日志是独立根目录（macOS 的 ~/Library/Logs/JetBrains）。
 type Options struct {
 	Home           string
@@ -36,12 +36,10 @@ type Options struct {
 	LogRoot        string
 	LogInsideCache bool
 	AppSupport     string // 配置与插件本体，只展示不删除
-	DataRoot       string // Linux 用户数据（插件等），只展示不删除；其他平台为空
 	// 完成页上的根目录标签，空时使用 macOS 默认文案
 	CacheLabel  string
 	LogLabel    string
 	ConfigLabel string
-	DataLabel   string
 }
 
 // ErrNoCache 缓存根目录不存在

@@ -69,8 +69,6 @@ EOF
     shot 04-jetbrains-done jetbrains 2.5s Enter Right Enter Sleep
     shot 05-agent agent 3s
     shot 10-claude claude 2.5s
-    shot 11-obsidian obsidian 1.5s Down Down
-    shot 12-obsidian-confirm obsidian 1.5s Enter Right
   } | sed 's/^Type "Sleep"$/Sleep 5s/' > "$tape"
   vhs "$tape" >/dev/null
   rm -f "$tape"

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// layoutFixture 搭一套 Windows/Linux 布局：日志在产品缓存的 log 子目录，配置与用户数据在旁边。
+// layoutFixture 搭一套 Windows 布局：日志在产品缓存的 log 子目录，配置在旁边。
 func layoutFixture(t *testing.T, o Options) Options {
 	t.Helper()
 	ide := filepath.Join(o.CacheRoot, "IntelliJIdea2026.2")
@@ -21,14 +21,11 @@ func layoutFixture(t *testing.T, o Options) Options {
 	acp := filepath.Join(ide, "acp-agents")
 	mustMkdir(t, filepath.Join(acp, "claude-acp", "0.9.0"))
 	mustMkdir(t, filepath.Join(acp, "claude-acp", "0.10.0"))
-	// 配置和用户数据里放点东西，确认扫描不会把它们算进来
+	// 配置里放点东西，确认扫描不会把它们算进来
 	if o.AppSupport != "" {
 		cfg := filepath.Join(o.AppSupport, "IntelliJIdea2026.2", "options")
 		mustMkdir(t, cfg)
 		mustWrite(t, filepath.Join(cfg, "other.xml"))
-	}
-	if o.DataRoot != "" {
-		mustMkdir(t, filepath.Join(o.DataRoot, "IntelliJIdea2026.2", "plugins"))
 	}
 	return o
 }
@@ -43,10 +40,8 @@ func TestClassifyLogInsideCache(t *testing.T) {
 		CacheRoot:      filepath.Join(home, "cache", "JetBrains"),
 		LogInsideCache: true,
 		AppSupport:     filepath.Join(home, "config", "JetBrains"),
-		DataRoot:       filepath.Join(home, "share", "JetBrains"),
 		CacheLabel:     "cache/JetBrains",
 		ConfigLabel:    "config/JetBrains",
-		DataLabel:      "local/share",
 	})
 
 	items, err := Classify(o)
@@ -56,8 +51,8 @@ func TestClassifyLogInsideCache(t *testing.T) {
 	got := map[string]int{}
 	for _, it := range items {
 		got[it.Group+"/"+it.Name] = it.Category
-		if within(it.Path, o.AppSupport) || it.Path == o.AppSupport || within(it.Path, o.DataRoot) || it.Path == o.DataRoot {
-			t.Errorf("不应扫描配置或用户数据：%s", it.Path)
+		if within(it.Path, o.AppSupport) || it.Path == o.AppSupport {
+			t.Errorf("不应扫描配置：%s", it.Path)
 		}
 	}
 	want := map[string]int{
@@ -128,7 +123,6 @@ func TestRemoveInsideCacheLog(t *testing.T) {
 		CacheRoot:      filepath.Join(home, "cache", "JetBrains"),
 		LogInsideCache: true,
 		AppSupport:     filepath.Join(home, "config", "JetBrains"),
-		DataRoot:       filepath.Join(home, "share", "JetBrains"),
 	})
 	logDir := filepath.Join(o.CacheRoot, "IntelliJIdea2026.2", "log")
 	if err := o.Remove(logDir); err != nil {
@@ -137,12 +131,10 @@ func TestRemoveInsideCacheLog(t *testing.T) {
 	if _, err := os.Stat(logDir); !os.IsNotExist(err) {
 		t.Fatal("log 应该已被删除")
 	}
-	// 配置、用户数据和缓存根本身不能删
+	// 配置和缓存根本身不能删
 	for _, p := range []string{
 		o.AppSupport,
 		filepath.Join(o.AppSupport, "IntelliJIdea2026.2"),
-		o.DataRoot,
-		filepath.Join(o.DataRoot, "IntelliJIdea2026.2", "plugins"),
 		o.CacheRoot,
 		o.Home,
 	} {
@@ -163,16 +155,14 @@ func TestRootsSkipEmbeddedLog(t *testing.T) {
 		LogRoot:        filepath.Join(home, "cache", "JetBrains", "IntelliJIdea2026.2", "log"),
 		LogInsideCache: true,
 		AppSupport:     filepath.Join(home, "config", "JetBrains"),
-		DataRoot:       filepath.Join(home, "share", "JetBrains"),
 		CacheLabel:     "cache/JetBrains",
 		ConfigLabel:    "config/JetBrains",
-		DataLabel:      "local/share",
 	}}
 	roots := s.Roots()
-	if len(roots) != 3 {
+	if len(roots) != 2 {
 		t.Fatalf("日志在缓存内时不应单独列出日志根，实际 %d 项", len(roots))
 	}
-	if roots[0].Path != s.Opts.CacheRoot || roots[1].Untouched != true || roots[2].Path != s.Opts.DataRoot {
+	if roots[0].Path != s.Opts.CacheRoot || roots[1].Path != s.Opts.AppSupport || !roots[1].Untouched {
 		t.Fatalf("根目录不符合预期：%+v", roots)
 	}
 }
@@ -200,9 +190,6 @@ func TestPlatformOptions(t *testing.T) {
 		if o.AppSupport != filepath.Join(home, "Library", "Application Support", "JetBrains") {
 			t.Fatalf("配置路径不对：%s", o.AppSupport)
 		}
-		if o.DataRoot != "" {
-			t.Fatal("macOS 不应有独立的用户数据根")
-		}
 	case "windows":
 		if !o.LogInsideCache || o.LogRoot != "" {
 			t.Fatalf("Windows 日志应留在缓存内部，LogRoot=%q", o.LogRoot)
@@ -221,32 +208,6 @@ func TestPlatformOptions(t *testing.T) {
 		}
 		if o.AppSupport != filepath.Join(home, "CustomRoaming", "JetBrains") {
 			t.Fatalf("APPDATA 未生效：%s", o.AppSupport)
-		}
-	case "linux":
-		if !o.LogInsideCache || o.LogRoot != "" {
-			t.Fatalf("Linux 日志应留在缓存内部，LogRoot=%q", o.LogRoot)
-		}
-		if o.CacheRoot != filepath.Join(home, ".cache", "JetBrains") {
-			t.Fatalf("默认缓存路径不对：%s", o.CacheRoot)
-		}
-		if o.AppSupport != filepath.Join(home, ".config", "JetBrains") {
-			t.Fatalf("默认配置路径不对：%s", o.AppSupport)
-		}
-		if o.DataRoot != filepath.Join(home, ".local", "share", "JetBrains") {
-			t.Fatalf("默认用户数据路径不对：%s", o.DataRoot)
-		}
-		env["XDG_CACHE_HOME"] = filepath.Join(home, "xdg-cache")
-		env["XDG_CONFIG_HOME"] = filepath.Join(home, "xdg-config")
-		env["XDG_DATA_HOME"] = filepath.Join(home, "xdg-data")
-		o = platformOptions(home, lookup)
-		if o.CacheRoot != filepath.Join(home, "xdg-cache", "JetBrains") {
-			t.Fatalf("XDG_CACHE_HOME 未生效：%s", o.CacheRoot)
-		}
-		if o.AppSupport != filepath.Join(home, "xdg-config", "JetBrains") {
-			t.Fatalf("XDG_CONFIG_HOME 未生效：%s", o.AppSupport)
-		}
-		if o.DataRoot != filepath.Join(home, "xdg-data", "JetBrains") {
-			t.Fatalf("XDG_DATA_HOME 未生效：%s", o.DataRoot)
 		}
 	default:
 		t.Skip("未覆盖的平台")

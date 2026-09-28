@@ -48,15 +48,6 @@ func Tools() []screens.Tool {
 			},
 			New: screens.NewClaude,
 		},
-		{
-			ID: "obsidian", Group: "工具", Name: "Obsidian 目录链接", Desc: "按子目录选择性链接进 vault",
-			Detail: []string{
-				"把工作目录按一级子目录选择性链接进 Obsidian 库",
-				"避免归档、素材、node_modules 被 Obsidian 索引",
-				"实时预览新增与移除的链接，源目录保持不动",
-			},
-			New: screens.NewObsidian,
-		},
 	}
 }
 
@@ -70,14 +61,12 @@ func Find(id string) (screens.Tool, bool) {
 	return screens.Tool{}, false
 }
 
-// jetbrainsDetail JetBrains 的日志与配置目录位置随平台不同
+// jetbrainsDetail JetBrains 的日志与配置目录位置在 macOS 与 Windows 上不同
 func jetbrainsDetail(goos string) []string {
 	logs, keep := "清理 Logs/JetBrains 下的全部日志", "不改动 Application Support（设置、插件本体）"
 	switch goos {
 	case "windows":
 		logs, keep = "清理各产品缓存目录下 log 子目录中的日志", `不改动 %APPDATA%\JetBrains（设置、插件本体）`
-	case "linux":
-		logs, keep = "清理各产品缓存目录下 log 子目录中的日志", "不改动 ~/.config 与 ~/.local/share 下的 JetBrains（设置、插件本体）"
 	}
 	return []string{
 		"清理可本地重建的缓存，包括索引、编译缓存、内嵌浏览器缓存等",

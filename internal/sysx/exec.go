@@ -61,29 +61,3 @@ func firstLine(s string) string {
 	}
 	return s
 }
-
-// Step 一次操作步骤的执行记录，供界面逐条展示
-type Step struct {
-	Title string // 步骤说明
-	Cmd   string // 实际执行的命令，可为空
-	Err   error
-	Soft  bool // 失败也属正常（例如服务本来就没加载），界面上弱化显示
-}
-
-// Recorder 顺序执行命令并记录步骤
-type Recorder struct {
-	Runner Runner
-	Steps  []Step
-}
-
-// Do 执行一条命令并记录结果；soft 表示失败可以接受
-func (r *Recorder) Do(ctx context.Context, title string, c Cmd, soft bool) error {
-	_, err := r.Runner.Run(ctx, c)
-	r.Steps = append(r.Steps, Step{Title: title, Cmd: c.String(), Err: err, Soft: soft})
-	return err
-}
-
-// Note 记录一条不执行命令的说明
-func (r *Recorder) Note(title string, err error) {
-	r.Steps = append(r.Steps, Step{Title: title, Err: err})
-}

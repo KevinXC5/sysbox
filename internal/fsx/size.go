@@ -72,9 +72,3 @@ func PrettyPath(p string) string {
 	}
 	return p
 }
-
-// Home 当前用户家目录，读取失败时返回空串
-func Home() string {
-	h, _ := os.UserHomeDir()
-	return h
-}

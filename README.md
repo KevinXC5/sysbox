@@ -4,7 +4,7 @@
 
 # sysbox
 
-跨平台的系统维护工具箱：把零散的清理和工具更新脚本收进一个终端界面，支持 macOS、Windows 与 Linux。
+跨平台的系统维护工具箱：把零散的清理和工具更新脚本收进一个终端界面，支持 macOS 与 Windows。
 
 ## 功能
 
@@ -13,15 +13,14 @@
 | 清理 | JetBrains 缓存 | 清理索引、编译缓存与 IDE 日志；跳过需要重新下载的 Agent 与补全模型，不碰设置与插件目录 |
 | 清理 | Agent 垃圾 | 清理 Claude、Codex、OpenCode 等超过保留期的缓存和日志，以及可以确认的旧版本 |
 | 工具 | Claude Code 更新 | 断点续传下载指定版本，SHA-256 校验后调用官方安装 |
-| 工具 | Obsidian 目录链接 | 把工作目录按一级子目录选择性地链接进 Obsidian 库 |
 
 所有会修改系统的操作都有确认弹窗；加上 `--dry-run` 可以完整走一遍流程而不做任何修改。
 
 ## 安装
 
-支持 macOS、Windows 与 Linux，x86_64 与 ARM 架构均可。
+支持 macOS 与 Windows，x86_64 与 ARM 架构均可。
 
-macOS 与 Linux：
+macOS：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.sh | bash
@@ -68,11 +67,6 @@ sysbox version         # 显示版本号
   "theme": "auto",
   "agent": { "keep_days": 30 },
   "claude": { "proxy": "http://127.0.0.1:7890", "direct": false },
-  "obsidian": {
-    "src": "~/Documents/工作",
-    "dest": "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vault/工作",
-    "excludes": ["归档", "素材"]
-  },
   "update": { "disable_check": false }
 }
 ```
@@ -82,16 +76,14 @@ sysbox version         # 显示版本号
 | `agent.keep_days` | 缓存与日志的保留天数，默认 30 |
 | `claude.proxy` | 下载 Claude Code 使用的代理；代理不可用时自动直连。也可用环境变量 `PROXY_URL` 覆盖 |
 | `claude.direct` | 始终直连，等同于环境变量 `CLAUDE_NO_PROXY=1` |
-| `obsidian.src` / `dest` | 源目录与库内目标，未配置时该工具会显示配置指引 |
-| `obsidian.excludes` | 没有勾选记录时，默认不勾选的子目录 |
 
 ## 截图
 
 | | |
 |---|---|
-| ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) | ![确认弹窗](docs/screenshots/dark/03-jetbrains-confirm.png) |
-| ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) | ![Agent 垃圾](docs/screenshots/dark/05-agent.png) |
-| ![Claude Code 更新](docs/screenshots/dark/10-claude.png) | ![Obsidian 目录链接](docs/screenshots/dark/11-obsidian.png) |
+| ![首页](docs/screenshots/dark/01-home.png) | ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) |
+| ![确认弹窗](docs/screenshots/dark/03-jetbrains-confirm.png) | ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) |
+| ![Agent 垃圾](docs/screenshots/dark/05-agent.png) | ![Claude Code 更新](docs/screenshots/dark/10-claude.png) |
 
 浅色主题：
 

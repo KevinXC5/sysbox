@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -36,7 +36,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: 检查格式
-        if: runner.os == 'Linux'
+        if: runner.os == 'macOS'
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: 静态检查
         run: go vet ./...
@@ -74,7 +74,7 @@ jobs:
         run: |
           mkdir -p dist
           ldflags="-s -w -X github.com/KevinXC5/sysbox/internal/meta.Version=$TAG"
-          for os in darwin linux windows; do
+          for os in darwin windows; do
             for arch in arm64 amd64; do
               out="dist/sysbox-${os}-${arch}"
               if [ "$os" = windows ]; then out="${out}.exe"; fi

@@ -38,8 +38,6 @@ func TestAssetNameFor(t *testing.T) {
 	}{
 		{"darwin", "arm64", "sysbox-darwin-arm64"},
 		{"darwin", "amd64", "sysbox-darwin-amd64"},
-		{"linux", "amd64", "sysbox-linux-amd64"},
-		{"linux", "arm64", "sysbox-linux-arm64"},
 		{"windows", "amd64", "sysbox-windows-amd64.exe"},
 		{"windows", "arm64", "sysbox-windows-arm64.exe"},
 	}

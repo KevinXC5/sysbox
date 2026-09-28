@@ -68,8 +68,8 @@ type versionRule struct {
 
 var (
 	semverName = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:[-+][A-Za-z0-9._-]+)?$`)
-	// 平台段不再写死 macos：Windows / Linux 的下载文件名也要能识别，避免整条规则失效后静默跳过
-	grokName = regexp.MustCompile(`^grok-(\d+)\.(\d+)\.(\d+)-(?:macos|linux|windows)-(?:aarch64|x86_64|arm64|x64)(?:\.exe)?$`)
+	// 平台段同时识别 macos 与 windows，避免 Windows 上整条规则失效后静默跳过
+	grokName = regexp.MustCompile(`^grok-(\d+)\.(\d+)\.(\d+)-(?:macos|windows)-(?:aarch64|x86_64|arm64|x64)(?:\.exe)?$`)
 )
 
 // goos 运行平台，测试可替换，避免只能在对应系统上验证布局差异

@@ -55,13 +55,6 @@ func (s *Source) Roots() []cleanup.Root {
 		roots = append(roots, cleanup.Root{Label: logLabel, Path: s.Opts.LogRoot})
 	}
 	roots = append(roots, cleanup.Root{Label: configLabel, Path: s.Opts.AppSupport, Untouched: true})
-	if s.Opts.DataRoot != "" {
-		label := s.Opts.DataLabel
-		if label == "" {
-			label = "local/share"
-		}
-		roots = append(roots, cleanup.Root{Label: label, Path: s.Opts.DataRoot, Untouched: true})
-	}
 	return roots
 }
 

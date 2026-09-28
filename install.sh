@@ -16,24 +16,20 @@ info() { printf '\033[35m◆\033[0m %s\n' "$*"; }
 ok() { printf '\033[32m✓\033[0m %s\n' "$*"; }
 die() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
-case "$(uname -s)" in
-  Darwin) goos=darwin ;;
-  Linux) goos=linux ;;
-  *) die "sysbox 只支持 macOS 和 Linux" ;;
-esac
+[[ "$(uname -s)" == Darwin ]] || die "install.sh 只支持 macOS，Windows 请使用 install.ps1"
 
 # 在 Apple 芯片上经 Rosetta 转译运行的终端也安装 arm64 版本
 case "$(uname -m)" in
-  arm64|aarch64) arch=arm64 ;;
+  arm64) arch=arm64 ;;
   x86_64)
-    if [[ "${goos}" == darwin && "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" == 1 ]]; then
+    if [[ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" == 1 ]]; then
       arch=arm64
     else
       arch=amd64
     fi ;;
   *) die "不支持的架构：$(uname -m)" ;;
 esac
-asset="sysbox-${goos}-${arch}"
+asset="sysbox-darwin-${arch}"
 
 if [[ "${VERSION}" == latest ]]; then
   base="https://github.com/$REPO/releases/latest/download"
@@ -49,13 +45,7 @@ curl -fsSL --retry 3 -o "$tmp/${asset}" "${base}/${asset}" || die "下载失败�
 curl -fsSL --retry 3 -o "$tmp/checksums.txt" "${base}/checksums.txt" || die "下载校验文件失败"
 
 want="$(awk -v f="${asset}" '$2 == f { print $1 }' "$tmp/checksums.txt")"
-if command -v shasum >/dev/null 2>&1; then
-  got="$(shasum -a 256 "$tmp/${asset}" | awk '{ print $1 }')"
-elif command -v sha256sum >/dev/null 2>&1; then
-  got="$(sha256sum "$tmp/${asset}" | awk '{ print $1 }')"
-else
-  die "找不到 shasum 或 sha256sum，无法校验"
-fi
+got="$(shasum -a 256 "$tmp/${asset}" | awk '{ print $1 }')"
 [[ -n "${want}" && "${want}" == "${got}" ]] || die "SHA-256 校验失败，未安装"
 ok "校验通过"
 

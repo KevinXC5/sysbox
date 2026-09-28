@@ -21,16 +21,17 @@ internal/
   cleanup/           “扫描 → 勾选 → 删除”类工具的通用模型
   selfupdate/        从 GitHub Release 检查与安装新版本
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
-    jetbrains/  agentjunk/  claudeupdate/  obsidianlink/
+    jetbrains/  agentjunk/  claudeupdate/
   ui/
     theme/           配色（浅色、深色两套）、渐变、Logo
-    widget/          顶栏、底栏、面板、弹窗、进度条、步骤日志等组件
+    widget/          顶栏、底栏、面板、弹窗、进度条等组件
   tui/
     app.go           根模型：路由、全局按键、顶栏底栏
     registry.go      工具注册表
     screens/         页面：首页、通用清理页及各工具页
 scripts/             演示环境与截图录制
-install.sh           安装脚本
+install.sh           macOS 安装脚本
+install.ps1          Windows 安装脚本
 ```
 
 ### 分层约定

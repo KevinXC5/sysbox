@@ -36,7 +36,7 @@ func (o Options) allowed(p string) bool {
 			return false
 		}
 	}
-	if within(p, o.AppSupport) || within(p, o.DataRoot) || p == o.AppSupport || p == o.DataRoot {
+	if within(p, o.AppSupport) || p == o.AppSupport {
 		return false
 	}
 	return within(p, o.CacheRoot) || within(p, o.LogRoot)

@@ -86,7 +86,7 @@ type fakeRelease struct {
 	binaryHits  int
 	platform    string // 清单与下载路径中的平台键，默认 hostPlatform()
 	binary      string // 写入清单的 binary；为空则省略该字段
-	file        string // 下载路径上的文件名，默认 claude
+	file        string // 下载路径上的文件名，默认按平台取 claude 或 claude.exe
 }
 
 func (f *fakeRelease) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,7 @@ func (f *fakeRelease) plat() string {
 
 func (f *fakeRelease) fileName() string {
 	if f.file == "" {
-		return "claude"
+		return defaultBinary(f.plat())
 	}
 	return f.file
 }
@@ -437,35 +437,23 @@ func TestResolveProxy(t *testing.T) {
 }
 
 func TestPlatformID(t *testing.T) {
-	cases := []struct {
-		goos, goarch string
-		musl         bool
-		want         string
-	}{
-		{"darwin", "arm64", false, "darwin-arm64"},
-		{"darwin", "amd64", false, "darwin-x64"},
-		{"linux", "amd64", false, "linux-x64"},
-		{"linux", "arm64", false, "linux-arm64"},
-		{"linux", "amd64", true, "linux-x64-musl"},
-		{"linux", "arm64", true, "linux-arm64-musl"},
-		{"windows", "amd64", false, "win32-x64"},
-		{"windows", "arm64", false, "win32-arm64"},
+	cases := []struct{ goos, goarch, want string }{
+		{"darwin", "arm64", "darwin-arm64"},
+		{"darwin", "amd64", "darwin-x64"},
+		{"windows", "amd64", "win32-x64"},
+		{"windows", "arm64", "win32-arm64"},
 	}
 	for _, c := range cases {
-		got, err := platformID(c.goos, c.goarch, c.musl)
+		got, err := platformID(c.goos, c.goarch)
 		if err != nil || got != c.want {
-			t.Errorf("platformID(%s, %s, %v) = %q, %v，期望 %s", c.goos, c.goarch, c.musl, got, err, c.want)
+			t.Errorf("platformID(%s, %s) = %q, %v，期望 %s", c.goos, c.goarch, got, err, c.want)
 		}
 	}
-	if _, err := platformID("darwin", "386", false); err == nil {
+	if _, err := platformID("darwin", "386"); err == nil {
 		t.Error("不支持的架构应返回错误")
 	}
-	if _, err := platformID("freebsd", "amd64", false); err == nil {
+	if _, err := platformID("linux", "amd64"); err == nil {
 		t.Error("不支持的系统应返回错误")
-	}
-	// musl 只影响 Linux，其它系统即使传入也不应改名
-	if got, err := platformID("darwin", "arm64", true); err != nil || got != "darwin-arm64" {
-		t.Errorf("非 Linux 不应附加 musl：%q %v", got, err)
 	}
 }
 
@@ -473,7 +461,7 @@ func TestDefaultBinary(t *testing.T) {
 	if defaultBinary("win32-x64") != "claude.exe" || defaultBinary("win32-arm64") != "claude.exe" {
 		t.Error("Windows 平台缺省文件名应为 claude.exe")
 	}
-	if defaultBinary("darwin-arm64") != "claude" || defaultBinary("linux-x64-musl") != "claude" {
+	if defaultBinary("darwin-arm64") != "claude" || defaultBinary("darwin-x64") != "claude" {
 		t.Error("非 Windows 平台缺省文件名应为 claude")
 	}
 }

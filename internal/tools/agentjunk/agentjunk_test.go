@@ -31,7 +31,7 @@ func TestCompareVersion(t *testing.T) {
 	if _, ok := parseVersion("grok-1.0.41-macos-aarch64", grokName); !ok {
 		t.Error("grok 版本名应能解析")
 	}
-	for _, name := range []string{"grok-1.0.41-linux-x86_64", "grok-1.2.0-windows-x64.exe", "grok-1.2.0-windows-arm64"} {
+	for _, name := range []string{"grok-1.0.41-macos-x86_64", "grok-1.2.0-windows-x64.exe", "grok-1.2.0-windows-arm64"} {
 		v, ok := parseVersion(name, grokName)
 		if !ok || !v.release {
 			t.Errorf("grok 版本名应解析为正式版：%s %+v", name, v)
@@ -62,7 +62,7 @@ func fixture(t *testing.T) *Source {
 	t.Helper()
 	// 夹具按 Unix 布局搭建（入口不带 .exe），Windows 规则由专门的测试覆盖
 	prev := goos
-	goos = "linux"
+	goos = "darwin"
 	t.Cleanup(func() { goos = prev })
 	home, _ := filepath.EvalSymlinks(t.TempDir())
 	cache := filepath.Join(home, ".claude/cache")

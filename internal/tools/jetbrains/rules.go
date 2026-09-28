@@ -24,7 +24,7 @@ const (
 	localHistoryNote = "本地变更历史，删除后无法恢复"
 )
 
-// logDirName Windows/Linux 上各产品缓存目录内的日志子目录名
+// logDirName Windows 上各产品缓存目录内的日志子目录名
 const logDirName = "log"
 
 // cleanRules 可本地重建的目录，基本不耗流量
