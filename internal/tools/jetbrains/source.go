@@ -66,10 +66,10 @@ func (s *Source) Remove(it cleanup.Item) error { return s.Opts.Remove(it.Path) }
 func (s *Source) Notes() []string {
 	return []string{
 		"下次打开 IDE 会重建索引，前几分钟可能偏慢",
-		"Agent 与补全模型已跳过，不需要重新下载",
+		"Agent 只保留最新版本，补全模型已跳过，不需要重新下载",
 	}
 }
 
 func (s *Source) Tip() string {
-	return "下次打开 IDE 会重建索引，Agent 与补全模型仍在本地"
+	return "下次打开 IDE 会重建索引，最新版 Agent 与补全模型仍在本地"
 }

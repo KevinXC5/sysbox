@@ -4,7 +4,7 @@ package jetbrains
 
 // skipRules 删除后需要联网重新下载，一律跳过
 var skipRules = map[string]string{
-	"acp-agents":         "AI Agent 本体，删除后需要重新下载",
+	"acp-agents":         "AI Agent 本体，无法读取时整体跳过",
 	"full-line":          "整行补全模型，删除后需要重新下载",
 	"splash":             "启动画面资源，删除后需要重新下载",
 	"kubernetes":         "Kubernetes 插件下载的工具，删除后需要重新下载",

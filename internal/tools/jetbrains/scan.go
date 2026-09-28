@@ -76,7 +76,12 @@ func Classify(o Options) ([]cleanup.Item, error) {
 		p := filepath.Join(o.CacheRoot, top.Name())
 		base := cleanup.Item{Path: p, Name: top.Name(), Group: "JetBrains", IsDir: top.IsDir()}
 
-		// 顶层整目录跳过（如 acp-agents）
+		// acp-agents 展开后按 agent 只保留最新版本
+		if top.Name() == acpAgentsName && top.IsDir() && top.Type()&fs.ModeSymlink == 0 {
+			items = append(items, classifyAgents(p, "JetBrains")...)
+			continue
+		}
+		// 顶层整目录跳过
 		if note, ok := skipRules[top.Name()]; ok {
 			items = append(items, with(base, CatSkip, note))
 			continue
@@ -97,7 +102,12 @@ func Classify(o Options) ([]cleanup.Item, error) {
 			continue
 		}
 		for _, c := range children {
-			items = append(items, classifyChild(filepath.Join(p, c.Name()), top.Name(), c))
+			cp := filepath.Join(p, c.Name())
+			if c.Name() == acpAgentsName && c.IsDir() && c.Type()&fs.ModeSymlink == 0 {
+				items = append(items, classifyAgents(cp, top.Name())...)
+				continue
+			}
+			items = append(items, classifyChild(cp, top.Name(), c))
 		}
 	}
 

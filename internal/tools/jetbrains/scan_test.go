@@ -19,7 +19,16 @@ func fixture(t *testing.T) Options {
 	for _, d := range []string{"index", "caches", "full-line", "LocalHistory", "llm-jcp-outbox", "mystery"} {
 		mustMkdir(t, filepath.Join(ide, d))
 	}
-	mustMkdir(t, filepath.Join(o.CacheRoot, "acp-agents"))
+	// acp-agents：每个 agent 只保留最新版本
+	acp := filepath.Join(ide, "acp-agents")
+	for _, d := range []string{
+		"claude-acp/0.9.0", "claude-acp/0.10.0", "claude-acp/0.10.0-beta.1",
+		"opencode/1.18.32", ".downloads/opencode/1.18.31", ".downloads/opencode/1.18.32", ".runtimes/node",
+	} {
+		mustMkdir(t, filepath.Join(acp, d))
+	}
+	mustWrite(t, filepath.Join(acp, "registry.json"))
+	mustWrite(t, filepath.Join(acp, "claude-acp", ".DS_Store"))
 	mustMkdir(t, filepath.Join(o.LogRoot, "IntelliJIdea2026.2"))
 	mustWrite(t, filepath.Join(ide, "icon-cache-v2.db"))
 	mustWrite(t, filepath.Join(ide, ".pid"))
@@ -51,16 +60,24 @@ func TestClassify(t *testing.T) {
 		got[it.Group+"/"+it.Name] = it.Category
 	}
 	want := map[string]int{
-		"JetBrains/acp-agents":                CatSkip,
-		"IntelliJIdea2026.2/index":            CatClean,
-		"IntelliJIdea2026.2/caches":           CatClean,
-		"IntelliJIdea2026.2/icon-cache-v2.db": CatClean,
-		"IntelliJIdea2026.2/full-line":        CatSkip,
-		"IntelliJIdea2026.2/LocalHistory":     CatKeep,
-		"IntelliJIdea2026.2/.pid":             CatKeep,
-		"IntelliJIdea2026.2/llm-jcp-outbox":   CatLeftover,
-		"IntelliJIdea2026.2/mystery":          CatLeftover,
-		"Logs/IntelliJIdea2026.2":             CatClean,
+		"IntelliJIdea2026.2/acp-agents/claude-acp/0.10.0":           CatSkip,
+		"IntelliJIdea2026.2/acp-agents/claude-acp/0.10.0-beta.1":    CatClean,
+		"IntelliJIdea2026.2/acp-agents/claude-acp/0.9.0":            CatClean,
+		"IntelliJIdea2026.2/acp-agents/claude-acp/.DS_Store":        CatLeftover,
+		"IntelliJIdea2026.2/acp-agents/opencode/1.18.32":            CatSkip,
+		"IntelliJIdea2026.2/acp-agents/.downloads/opencode/1.18.31": CatClean,
+		"IntelliJIdea2026.2/acp-agents/.downloads/opencode/1.18.32": CatSkip,
+		"IntelliJIdea2026.2/acp-agents/.runtimes":                   CatSkip,
+		"IntelliJIdea2026.2/acp-agents/registry.json":               CatSkip,
+		"IntelliJIdea2026.2/index":                                  CatClean,
+		"IntelliJIdea2026.2/caches":                                 CatClean,
+		"IntelliJIdea2026.2/icon-cache-v2.db":                       CatClean,
+		"IntelliJIdea2026.2/full-line":                              CatSkip,
+		"IntelliJIdea2026.2/LocalHistory":                           CatKeep,
+		"IntelliJIdea2026.2/.pid":                                   CatKeep,
+		"IntelliJIdea2026.2/llm-jcp-outbox":                         CatLeftover,
+		"IntelliJIdea2026.2/mystery":                                CatLeftover,
+		"Logs/IntelliJIdea2026.2":                                   CatClean,
 	}
 	for k, c := range want {
 		if got[k] != c {
