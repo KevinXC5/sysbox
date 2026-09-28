@@ -84,7 +84,7 @@ $commits"
   response=$(curl -fsS --max-time 300 https://api.deepseek.com/chat/completions \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-    -d "$(jq -n --arg prompt "$prompt" '{model: "deepseek-v4-pro", messages: [{role: "user", content: $prompt}]}')") || return 1
+    -d "$(jq -n --arg prompt "$prompt" '{model: "deepseek-v4-flash", messages: [{role: "user", content: $prompt}]}')") || return 1
   notes=$(jq -r '.choices[0].message.content // empty' <<<"$response") || return 1
   [[ -n "${notes//[[:space:]]/}" ]] || return 1
   printf '%s\n' "$notes"
