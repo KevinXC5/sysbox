@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // DiskUsage 统计路径实际占用的磁盘空间（字节），口径与 du 一致。
@@ -22,18 +21,10 @@ func DiskUsage(path string) int64 {
 		if err != nil {
 			return nil
 		}
-		total += blockSize(info)
+		total += AllocSize(info)
 		return nil
 	})
 	return total
-}
-
-// blockSize 优先按已分配块计算，稀疏文件和 APFS 压缩文件才不会被高估。
-func blockSize(info fs.FileInfo) int64 {
-	if st, ok := info.Sys().(*syscall.Stat_t); ok {
-		return st.Blocks * 512
-	}
-	return info.Size()
 }
 
 // 大小单位，按 1024 进制

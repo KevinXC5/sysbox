@@ -68,10 +68,6 @@ EOF
     shot 03-jetbrains-confirm jetbrains 2.5s Enter Right
     shot 04-jetbrains-done jetbrains 2.5s Enter Right Enter Sleep
     shot 05-agent agent 3s
-    shot 06-appstore appstore 2.5s
-    shot 07-appstore-confirm appstore 2.5s d Right
-    shot 08-sangfor sangfor 3s
-    shot 09-cursorui cursorui 3s
     shot 10-claude claude 2.5s
     shot 11-obsidian obsidian 1.5s Down Down
     shot 12-obsidian-confirm obsidian 1.5s Enter Right

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/KevinXC5/sysbox/internal/cleanup"
 )
@@ -17,7 +18,9 @@ func backups(dir, name string) []string {
 	if !plainDir(dir) {
 		return nil
 	}
-	pattern := regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(name) + `[-_.](?:v?\d+\.\d+\.\d+|old|bak)(?:[-._].*)?$`)
+	// Windows 备份可能是 name.exe.old 或 name-1.2.3.exe，两种都认
+	base := strings.TrimSuffix(name, ".exe")
+	pattern := regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(base) + `(?:\.exe)?[-_.](?:v?\d+\.\d+\.\d+|old|bak)(?:[-._].*)?(?:\.exe)?$`)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -55,7 +58,16 @@ func (s *scanner) singleBinary(agent, entry, binary string, alias bool) {
 	if alias {
 		target, err := filepath.EvalSymlinks(entry)
 		realBinary, err2 := filepath.EvalSymlinks(binary)
-		if !isSymlink(entry) || err != nil || err2 != nil || target != realBinary {
+		same := err == nil && err2 == nil && target == realBinary
+		// Unix 上入口必须是指向本体的链接。Windows 常把入口复制成普通 exe，
+		// EvalSymlinks 会把两边都解成临时目录的真实路径，不能用来判断是不是同一份。
+		if goos == "windows" {
+			// 复制品和本体不在同一路径，只要入口本身是普通文件就继续找备份
+			efi, eerr := os.Lstat(entry)
+			if eerr != nil || !efi.Mode().IsRegular() {
+				return
+			}
+		} else if !isSymlink(entry) || !same {
 			return
 		}
 	}
@@ -65,9 +77,9 @@ func (s *scanner) singleBinary(agent, entry, binary string, alias bool) {
 // inspectBinaries 核查 OpenCode、omp、pi、fx 的安装，只报告不清理
 func (s *scanner) inspectBinaries(progress func(string)) {
 	progress("核查 OpenCode、omp、pi、fx 的安装")
-	s.singleBinary("OpenCode", ".local/bin/opencode", ".opencode/bin/opencode", true)
-	s.singleBinary("omp", ".local/bin/omp", ".local/bin/omp", false)
-	s.singleBinary("fx", ".local/bin/fx", ".local/bin/fx", false)
+	s.singleBinary("OpenCode", ".local/bin/"+exe("opencode"), ".opencode/bin/"+exe("opencode"), true)
+	s.singleBinary("omp", ".local/bin/"+exe("omp"), ".local/bin/"+exe("omp"), false)
+	s.singleBinary("fx", ".local/bin/"+exe("fx"), ".local/bin/"+exe("fx"), false)
 
 	// omp 的 natives 是配套组件，不是 CLI 旧版；存在多个版本时只提示
 	natives := filepath.Join(s.home, ".omp/natives")

@@ -4,6 +4,7 @@ package agentjunk
 
 import (
 	"regexp"
+	"runtime"
 
 	"github.com/KevinXC5/sysbox/internal/cleanup"
 )
@@ -57,23 +58,42 @@ var logDirs = []dirRule{
 type versionRule struct {
 	Agent      string
 	Dir        string         // 版本目录，相对家目录
-	Link       string         // 指向当前版本的链接
+	Link       string         // 指向当前版本的链接；Windows 上常是复制品而不是链接
 	Executable string         // 版本为目录时，目录内的可执行文件；版本为单文件时为空
 	Pattern    *regexp.Regexp // 版本名格式
 	OtherLinks []string       // 其他必须指向同一版本的命令链接
+	// linkOnly 为真时，入口不是符号链接就无法确认当前版本，只能降级为待核查
+	linkOnly bool
 }
 
 var (
 	semverName = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:[-+][A-Za-z0-9._-]+)?$`)
-	grokName   = regexp.MustCompile(`^grok-(\d+)\.(\d+)\.(\d+)-macos-(?:aarch64|x86_64)$`)
+	// 平台段不再写死 macos：Windows / Linux 的下载文件名也要能识别，避免整条规则失效后静默跳过
+	grokName = regexp.MustCompile(`^grok-(\d+)\.(\d+)\.(\d+)-(?:macos|linux|windows)-(?:aarch64|x86_64|arm64|x64)(?:\.exe)?$`)
 )
 
-var versionRules = []versionRule{
-	// Claude 链接直接指向版本文件
-	{"Claude", ".local/share/claude/versions", ".local/bin/claude", "", semverName, nil},
-	// Codex 链接指向包含 bin/codex 的 release 目录
-	{"Codex", ".codex/packages/standalone/releases", ".codex/packages/standalone/current", "bin/codex", semverName, nil},
-	{"Grok", ".grok/downloads", ".grok/bin/grok", "", grokName, []string{".grok/bin/agent"}},
+// goos 运行平台，测试可替换，避免只能在对应系统上验证布局差异
+var goos = runtime.GOOS
+
+// exe 非 Windows 原样返回，Windows 补上 .exe
+func exe(name string) string {
+	if goos == "windows" && name != "" {
+		return name + ".exe"
+	}
+	return name
+}
+
+func versionRules() []versionRule {
+	// Windows 上 Claude 的 claude.exe 是从版本目录复制出来的，不是符号链接；
+	// Codex、Grok 的入口同样无法靠链接确认当前版本。linkOnly 让这些规则只展示、不删除。
+	linkOnly := goos == "windows"
+	return []versionRule{
+		// Claude 链接直接指向版本文件
+		{"Claude", ".local/share/claude/versions", ".local/bin/" + exe("claude"), "", semverName, nil, linkOnly},
+		// Codex 链接指向包含 bin/codex 的 release 目录
+		{"Codex", ".codex/packages/standalone/releases", ".codex/packages/standalone/current", "bin/" + exe("codex"), semverName, nil, linkOnly},
+		{"Grok", ".grok/downloads", ".grok/bin/" + exe("grok"), "", grokName, []string{".grok/bin/" + exe("agent")}, linkOnly},
+	}
 }
 
 // agentProcs 用于提示“相关 agent 正在运行”的进程名

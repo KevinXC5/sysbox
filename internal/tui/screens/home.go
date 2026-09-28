@@ -1,10 +1,9 @@
 package screens
 
 import (
-	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -41,20 +40,8 @@ func (m *Home) SetNewVersion(v string) { m.newVersion = v }
 
 func (m *Home) Init() tea.Cmd { return loadSysInfo }
 
-// loadSysInfo 读取系统版本与数据盘空间
-func loadSysInfo() tea.Msg {
-	var info sysInfo
-	if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
-		info.os = "macOS " + strings.TrimSpace(string(out))
-	}
-	// APFS 下用户数据在 Data 卷，取不到时退回根卷
-	var st syscall.Statfs_t
-	if syscall.Statfs("/System/Volumes/Data", &st) == nil || syscall.Statfs("/", &st) == nil {
-		info.free = int64(st.Bavail) * int64(st.Bsize)
-		info.total = int64(st.Blocks) * int64(st.Bsize)
-	}
-	return sysInfoMsg(info)
-}
+// loadSysInfo 读取系统版本与数据盘空间，实现按平台区分
+func loadSysInfo() tea.Msg { return sysInfoMsg(readSysInfo()) }
 
 func (m *Home) Busy() bool { return false }
 
@@ -98,7 +85,7 @@ func (m *Home) Status() string {
 func (m *Home) Body(w, h int) string {
 	iw := w - 4
 	// 品牌区：空间充足时显示大字 Logo，否则收成单行字标，再不够就省略
-	tagline := theme.SubtleStyle.Render("个人 macOS 维护工具箱") + theme.MutedStyle.Render("   清理 · 进程治理 · 工具")
+	tagline := theme.SubtleStyle.Render("系统维护工具箱") + theme.MutedStyle.Render("   "+strings.Join(m.groups(), " · "))
 	var brand string
 	switch {
 	case h >= 30 && iw >= 56:
@@ -199,4 +186,15 @@ func (m *Home) infoLine(w int) string {
 		return right
 	}
 	return widget.Spread(w, left, right)
+}
+
+// groups 按出现顺序列出工具分组，平台不支持的分组不会出现
+func (m *Home) groups() []string {
+	var out []string
+	for _, t := range m.tools {
+		if !slices.Contains(out, t.Group) {
+			out = append(out, t.Group)
+		}
+	}
+	return out
 }

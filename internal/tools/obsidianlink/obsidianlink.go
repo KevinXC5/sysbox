@@ -1,7 +1,8 @@
 // Package obsidianlink 把一个工作目录按一级子目录选择性地链接进 Obsidian 库。
 //
 // ln -s 无法排除子目录，整目录链进库后归档、素材、node_modules 都会被索引。
-// 这里把库内目标改成普通文件夹，只为勾选的一级子目录建立符号链接；源目录保持不变，可反复执行。
+// 这里把库内目标改成普通文件夹，只为勾选的一级子目录建立链接；源目录保持不变，可反复执行。
+// macOS/Linux 使用符号链接；Windows 使用目录 junction（不需要管理员或开发者模式）。
 package obsidianlink
 
 import (
@@ -81,7 +82,7 @@ func detect(dest string) (State, error) {
 		return StateMissing, nil
 	case err != nil:
 		return 0, err
-	case fi.Mode()&os.ModeSymlink != 0:
+	case isLink(fi):
 		return StateFullLink, nil
 	case fi.IsDir():
 		return StateSelective, nil
@@ -113,11 +114,14 @@ func linked(o Options) map[string]bool {
 	}
 	entries, _ := os.ReadDir(o.Dest)
 	for _, e := range entries {
-		if e.Type()&os.ModeSymlink == 0 {
+		child := filepath.Join(o.Dest, e.Name())
+		// ReadDir 的 Type 在 Windows junction 上不含 ModeSymlink，必须 Lstat
+		fi, err := os.Lstat(child)
+		if err != nil || !isLink(fi) {
 			continue
 		}
-		target, err := os.Readlink(filepath.Join(o.Dest, e.Name()))
-		if err == nil && (target == filepath.Join(o.Src, e.Name()) || target == e.Name()) {
+		target, err := os.Readlink(child)
+		if err == nil && sameLinkTarget(target, filepath.Join(o.Src, e.Name()), e.Name()) {
 			m[e.Name()] = true
 		}
 	}
@@ -181,7 +185,7 @@ func BuildPlan(o Options, s Snapshot, chosen map[string]bool) Plan {
 			p.Keep = append(p.Keep, n)
 		case chosen[n]:
 			p.Add = append(p.Add, n)
-		case isSymlink(child):
+		case isLinkPath(child):
 			p.Remove = append(p.Remove, n)
 		case exists(child) && s.State == StateSelective:
 			p.Skip = append(p.Skip, n)
@@ -224,28 +228,51 @@ func Apply(o Options, s Snapshot, p Plan, chosen []string) []sysx.Step {
 	}
 	for _, n := range p.Add {
 		child := filepath.Join(o.Dest, n)
-		if exists(child) && !isSymlink(child) {
+		if exists(child) && !isLinkPath(child) {
 			rec.Note("跳过 "+n+"：库内已有真实路径", nil)
 			continue
 		}
-		_ = os.Remove(child) // 指向别处的旧链接先移除
-		rec.Note("链接 "+n, os.Symlink(filepath.Join(o.Src, n), child))
+		_ = os.Remove(child) // 指向别处的旧链接先移除；Remove 只删链接本身
+		rec.Note("链接 "+n, linkDir(filepath.Join(o.Src, n), child))
 	}
 	for _, n := range p.Remove {
 		child := filepath.Join(o.Dest, n)
-		if !isSymlink(child) {
-			rec.Note("跳过 "+n+"：不是符号链接", nil)
+		if !isLinkPath(child) {
+			rec.Note("跳过 "+n+"：不是链接", nil)
 			continue
 		}
+		// 必须用 Remove：junction 上 RemoveAll 会顺着链接删掉源目录内容
 		rec.Note("移除 "+n, os.Remove(child))
 	}
 	rec.Note("保存勾选记录", SaveRemembered(o, chosen))
 	return rec.Steps
 }
 
-func isSymlink(p string) bool {
+// isLinkPath 路径本身是否为符号链接或 Windows 目录 junction。
+// junction 在 Go 1.23+ 的 Lstat 里是 ModeIrregular，不是 ModeSymlink，不能只看后者。
+func isLinkPath(p string) bool {
 	fi, err := os.Lstat(p)
-	return err == nil && fi.Mode()&os.ModeSymlink != 0
+	return err == nil && isLink(fi)
+}
+
+// sameLinkTarget 链接目标是否指向期望路径。
+// Windows 的 Readlink 用反斜杠，且可能带 \\?\ 前缀；比较时统一成当前平台的分隔符。
+func sameLinkTarget(target, abs, name string) bool {
+	if target == name {
+		return true
+	}
+	return filepath.Clean(normalizeLink(target)) == filepath.Clean(abs)
+}
+
+func normalizeLink(target string) string {
+	const prefix = `\\?\`
+	if len(target) >= len(prefix) && target[:len(prefix)] == prefix {
+		target = target[len(prefix):]
+	}
+	if os.PathSeparator == '\\' {
+		return strings.ReplaceAll(target, "/", `\`)
+	}
+	return strings.ReplaceAll(target, `\`, "/")
 }
 
 func exists(p string) bool {

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -28,6 +29,28 @@ func TestNewer(t *testing.T) {
 		if got := Newer(c.latest, c.current); got != c.want {
 			t.Errorf("Newer(%q, %q) = %v", c.latest, c.current, got)
 		}
+	}
+}
+
+func TestAssetNameFor(t *testing.T) {
+	cases := []struct {
+		goos, goarch, want string
+	}{
+		{"darwin", "arm64", "sysbox-darwin-arm64"},
+		{"darwin", "amd64", "sysbox-darwin-amd64"},
+		{"linux", "amd64", "sysbox-linux-amd64"},
+		{"linux", "arm64", "sysbox-linux-arm64"},
+		{"windows", "amd64", "sysbox-windows-amd64.exe"},
+		{"windows", "arm64", "sysbox-windows-arm64.exe"},
+	}
+	for _, c := range cases {
+		if got := AssetNameFor(c.goos, c.goarch); got != c.want {
+			t.Errorf("AssetNameFor(%q, %q) = %q，期望 %q", c.goos, c.goarch, got, c.want)
+		}
+	}
+	want := AssetNameFor(runtime.GOOS, runtime.GOARCH)
+	if got := AssetName(); got != want {
+		t.Errorf("AssetName() = %q，期望 %q", got, want)
 	}
 }
 

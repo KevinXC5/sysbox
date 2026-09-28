@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -21,28 +21,22 @@ type Proc struct {
 	Path    string // 可执行文件路径
 }
 
-// Name 可执行文件名
+// Name 可执行文件名。Windows 进程快照只给出 exe 名，这里原样返回，比较时再规范化。
 func (p Proc) Name() string { return filepath.Base(p.Path) }
 
-// BusyRatio 累计 CPU 时间占运行时长的比例，持续接近 1 说明一直占满一个核
-func (p Proc) BusyRatio() float64 {
-	if p.Elapsed <= 0 {
-		return 0
+// exeName 用于进程名比较：Windows 去掉 .exe 并忽略大小写，其余平台保持原样。
+// 调用方传入的名字不带后缀（claude、idea），快照里则是 claude.exe。
+func exeName(name string) string {
+	name = filepath.Base(name)
+	if runtime.GOOS != "windows" {
+		return name
 	}
-	return float64(p.CPUTime) / float64(p.Elapsed)
+	name = strings.TrimSuffix(strings.ToLower(name), ".exe")
+	return name
 }
 
 // psFields ps 输出字段；comm 放最后，路径里的空格才不会打乱列
 const psFields = "pid=,%cpu=,time=,etime=,rss=,stat=,comm="
-
-// Procs 列出当前所有进程
-func Procs(ctx context.Context, r Runner) ([]Proc, error) {
-	out, err := r.Run(ctx, C("ps", "-axo", psFields))
-	if err != nil {
-		return nil, err
-	}
-	return ParsePS(out), nil
-}
 
 // FindProcs 按过滤条件查找进程，排除 sysbox 自身
 func FindProcs(ctx context.Context, r Runner, match func(Proc) bool) ([]Proc, error) {
@@ -64,9 +58,9 @@ func FindProcs(ctx context.Context, r Runner, match func(Proc) bool) ([]Proc, er
 func ByName(names ...string) func(Proc) bool {
 	set := map[string]bool{}
 	for _, n := range names {
-		set[n] = true
+		set[exeName(n)] = true
 	}
-	return func(p Proc) bool { return set[p.Name()] }
+	return func(p Proc) bool { return set[exeName(p.Name())] }
 }
 
 // ParsePS 解析 ps -o pid=,%cpu=,time=,etime=,rss=,stat=,comm= 的输出
@@ -138,68 +132,4 @@ func ParseClock(s string) time.Duration {
 	}
 	return time.Duration(days)*24*time.Hour + time.Duration(total)*time.Second +
 		time.Duration(frac*float64(time.Second))
-}
-
-// Terminate 先发 TERM 让进程体面退出，超时后对仍存活的进程发 KILL，返回最终仍存活的进程号。
-// 信号经由 Runner 发送：root 为真时以 sudo 执行；演练模式下只记录命令，视为全部结束。
-func Terminate(ctx context.Context, r Runner, pids []int, grace time.Duration, root bool) []int {
-	if len(pids) == 0 {
-		return nil
-	}
-	kill := func(sig string, targets []int) {
-		args := append([]string{"-" + sig}, pidStrings(targets)...)
-		c := C("kill", args...)
-		c.Sudo = root
-		_, _ = r.Run(ctx, c)
-	}
-	kill("TERM", pids)
-	if IsDry(r) {
-		return nil
-	}
-	alive := waitExit(pids, grace)
-	if len(alive) > 0 {
-		kill("KILL", alive)
-		alive = waitExit(alive, time.Second)
-	}
-	return alive
-}
-
-func pidStrings(pids []int) []string {
-	s := make([]string, len(pids))
-	for i, p := range pids {
-		s[i] = strconv.Itoa(p)
-	}
-	return s
-}
-
-// PIDs 提取进程号
-func PIDs(procs []Proc) []int {
-	out := make([]int, len(procs))
-	for i, p := range procs {
-		out[i] = p.PID
-	}
-	return out
-}
-
-// waitExit 轮询等待进程退出，返回超时后仍存活的进程号
-func waitExit(pids []int, timeout time.Duration) []int {
-	deadline := time.Now().Add(timeout)
-	for {
-		var alive []int
-		for _, pid := range pids {
-			if Alive(pid) {
-				alive = append(alive, pid)
-			}
-		}
-		if len(alive) == 0 || time.Now().After(deadline) {
-			return alive
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-// Alive 进程是否存在；对无权发信号的进程（EPERM）同样视为存在
-func Alive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
 }

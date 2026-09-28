@@ -37,6 +37,9 @@ type fakeRelease struct {
 	ignoreRange bool   // 不支持续传，总是返回完整内容
 	failOnce    int    // 第一次下载返回该状态码
 	binaryHits  int
+	platform    string // 清单与下载路径中的平台键，默认 darwin-arm64
+	binary      string // 写入清单的 binary；为空则省略该字段
+	file        string // 下载路径上的文件名，默认 claude
 }
 
 func (f *fakeRelease) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -47,13 +50,31 @@ func (f *fakeRelease) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, testVersion)
 	case strings.HasSuffix(r.URL.Path, "/manifest.json"):
 		sum := sha256.Sum256(f.payload)
-		fmt.Fprintf(w, `{"platforms":{"darwin-arm64":{"checksum":%q}}}`, hex.EncodeToString(sum[:]))
-	case strings.HasSuffix(r.URL.Path, "/darwin-arm64/claude"):
+		if f.binary != "" {
+			fmt.Fprintf(w, `{"platforms":{%q:{"checksum":%q,"binary":%q}}}`, f.plat(), hex.EncodeToString(sum[:]), f.binary)
+		} else {
+			fmt.Fprintf(w, `{"platforms":{%q:{"checksum":%q}}}`, f.plat(), hex.EncodeToString(sum[:]))
+		}
+	case strings.HasSuffix(r.URL.Path, "/"+f.plat()+"/"+f.fileName()):
 		f.binaryHits++
 		f.serveBinary(w, r)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (f *fakeRelease) plat() string {
+	if f.platform == "" {
+		return "darwin-arm64"
+	}
+	return f.platform
+}
+
+func (f *fakeRelease) fileName() string {
+	if f.file == "" {
+		return "claude"
+	}
+	return f.file
 }
 
 func (f *fakeRelease) serveBinary(w http.ResponseWriter, r *http.Request) {
@@ -132,15 +153,21 @@ func (h *harness) run(target string) (Result, error) {
 func (h *harness) log() string { return strings.Join(h.logs, "\n") }
 
 func (h *harness) versionFile() string {
-	return filepath.Join(h.home, ".local/share/claude/versions", testVersion)
+	name := testVersion
+	if strings.HasPrefix(h.opts.Platform, "win32-") {
+		name += ".exe"
+	}
+	return filepath.Join(h.home, ".local", "share", "claude", "versions", name)
 }
 
-func (h *harness) link() string { return filepath.Join(h.home, ".local/bin/claude") }
+func (h *harness) link() string {
+	return filepath.Join(h.home, ".local", "bin", "claude")
+}
 
 // oldInstall 预置一个旧版本并让链接指向它
 func (h *harness) oldInstall() string {
 	h.t.Helper()
-	old := filepath.Join(h.home, ".local/share/claude/versions/2.1.1")
+	old := filepath.Join(h.home, ".local", "share", "claude", "versions", "2.1.1")
 	if err := os.MkdirAll(filepath.Dir(old), 0o755); err != nil {
 		h.t.Fatal(err)
 	}
@@ -243,7 +270,7 @@ func TestResumeAfterDisconnect(t *testing.T) {
 // 服务器不支持续传时，同一次尝试内改为从头下载
 func TestRangeIgnoredRestartsInPlace(t *testing.T) {
 	h := newHarness(t)
-	part := filepath.Join(h.home, ".local/share/claude/update-cache", testVersion+"-darwin-arm64.part")
+	part := filepath.Join(h.home, ".local", "share", "claude", "update-cache", testVersion+"-darwin-arm64.part")
 	if err := os.MkdirAll(filepath.Dir(part), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -338,5 +365,87 @@ func TestResolveProxy(t *testing.T) {
 	}
 	if p, _ := ResolveProxy("http://127.0.0.1:7890", true); p != "" {
 		t.Error("设置直连时不应使用代理")
+	}
+}
+
+func TestPlatformID(t *testing.T) {
+	cases := []struct {
+		goos, goarch string
+		musl         bool
+		want         string
+	}{
+		{"darwin", "arm64", false, "darwin-arm64"},
+		{"darwin", "amd64", false, "darwin-x64"},
+		{"linux", "amd64", false, "linux-x64"},
+		{"linux", "arm64", false, "linux-arm64"},
+		{"linux", "amd64", true, "linux-x64-musl"},
+		{"linux", "arm64", true, "linux-arm64-musl"},
+		{"windows", "amd64", false, "win32-x64"},
+		{"windows", "arm64", false, "win32-arm64"},
+	}
+	for _, c := range cases {
+		got, err := platformID(c.goos, c.goarch, c.musl)
+		if err != nil || got != c.want {
+			t.Errorf("platformID(%s, %s, %v) = %q, %v，期望 %s", c.goos, c.goarch, c.musl, got, err, c.want)
+		}
+	}
+	if _, err := platformID("darwin", "386", false); err == nil {
+		t.Error("不支持的架构应返回错误")
+	}
+	if _, err := platformID("freebsd", "amd64", false); err == nil {
+		t.Error("不支持的系统应返回错误")
+	}
+	// musl 只影响 Linux，其它系统即使传入也不应改名
+	if got, err := platformID("darwin", "arm64", true); err != nil || got != "darwin-arm64" {
+		t.Errorf("非 Linux 不应附加 musl：%q %v", got, err)
+	}
+}
+
+func TestDefaultBinary(t *testing.T) {
+	if defaultBinary("win32-x64") != "claude.exe" || defaultBinary("win32-arm64") != "claude.exe" {
+		t.Error("Windows 平台缺省文件名应为 claude.exe")
+	}
+	if defaultBinary("darwin-arm64") != "claude" || defaultBinary("linux-x64-musl") != "claude" {
+		t.Error("非 Windows 平台缺省文件名应为 claude")
+	}
+}
+
+// Windows 清单带 binary=claude.exe 时，下载路径、缓存和版本文件都带 .exe，并仍调用 install 子命令
+func TestWindowsBinaryName(t *testing.T) {
+	h := newHarness(t)
+	h.opts.Platform = "win32-x64"
+	h.srv.platform = "win32-x64"
+	h.srv.binary = "claude.exe"
+	h.srv.file = "claude.exe"
+	if _, err := h.run("latest"); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if _, err := os.Stat(h.versionFile()); err != nil {
+		t.Fatalf("版本文件应为 %s：%v", h.versionFile(), err)
+	}
+	partDir := filepath.Join(h.home, ".local", "share", "claude", "update-cache")
+	entries, err := os.ReadDir(partDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("安装后缓存应被移走：%v %v", entries, err)
+	}
+	if target, err := os.Readlink(h.link()); err != nil || target != h.versionFile() {
+		t.Fatalf("install 子命令收到的路径应为版本文件：%s %v", target, err)
+	}
+}
+
+// 旧清单没有 binary 字段时，Windows 仍按 claude.exe 下载
+func TestWindowsBinaryFallback(t *testing.T) {
+	h := newHarness(t)
+	h.opts.Platform = "win32-arm64"
+	h.srv.platform = "win32-arm64"
+	h.srv.file = "claude.exe"
+	if _, err := h.run(testVersion); err != nil {
+		t.Fatalf("%v\n%s", err, h.log())
+	}
+	if !strings.HasSuffix(h.versionFile(), ".exe") {
+		t.Fatal(h.versionFile())
+	}
+	if _, err := os.Stat(h.versionFile()); err != nil {
+		t.Fatal(err)
 	}
 }

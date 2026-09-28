@@ -35,11 +35,34 @@ func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
 }
 
 func (s *Source) Roots() []cleanup.Root {
-	return []cleanup.Root{
-		{Label: "Caches/JetBrains", Path: s.Opts.CacheRoot},
-		{Label: "Logs/JetBrains", Path: s.Opts.LogRoot},
-		{Label: "Application Support", Path: s.Opts.AppSupport, Untouched: true},
+	cacheLabel := s.Opts.CacheLabel
+	logLabel := s.Opts.LogLabel
+	configLabel := s.Opts.ConfigLabel
+	if cacheLabel == "" {
+		cacheLabel = "Caches/JetBrains"
 	}
+	if logLabel == "" {
+		logLabel = "Logs/JetBrains"
+	}
+	if configLabel == "" {
+		configLabel = "Application Support"
+	}
+	roots := []cleanup.Root{
+		{Label: cacheLabel, Path: s.Opts.CacheRoot},
+	}
+	// 日志在缓存内部时，完成页只对比缓存根，避免同一棵目录算两遍
+	if !s.Opts.LogInsideCache {
+		roots = append(roots, cleanup.Root{Label: logLabel, Path: s.Opts.LogRoot})
+	}
+	roots = append(roots, cleanup.Root{Label: configLabel, Path: s.Opts.AppSupport, Untouched: true})
+	if s.Opts.DataRoot != "" {
+		label := s.Opts.DataLabel
+		if label == "" {
+			label = "local/share"
+		}
+		roots = append(roots, cleanup.Root{Label: label, Path: s.Opts.DataRoot, Untouched: true})
+	}
+	return roots
 }
 
 // Check IDE 运行时会持续写入缓存，必须先退出
@@ -67,6 +90,7 @@ func (s *Source) Notes() []string {
 	return []string{
 		"下次打开 IDE 会重建索引，前几分钟可能偏慢",
 		"Agent 只保留最新版本，补全模型已跳过，不需要重新下载",
+		configNote(),
 	}
 }
 

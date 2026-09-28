@@ -30,6 +30,12 @@ func TestCompareVersion(t *testing.T) {
 	if _, ok := parseVersion("grok-1.0.41-macos-aarch64", grokName); !ok {
 		t.Error("grok 版本名应能解析")
 	}
+	for _, name := range []string{"grok-1.0.41-linux-x86_64", "grok-1.2.0-windows-x64.exe", "grok-1.2.0-windows-arm64"} {
+		v, ok := parseVersion(name, grokName)
+		if !ok || !v.release {
+			t.Errorf("grok 版本名应解析为正式版：%s %+v", name, v)
+		}
+	}
 }
 
 // setAge 把路径及其下所有条目的修改时间设为 days 天前
@@ -162,5 +168,56 @@ func TestRemoveRejectsActiveSwitch(t *testing.T) {
 	mustLink(t, v.Path, link)
 	if err := s.Remove(v); err == nil {
 		t.Fatal("当前版本切换到该条目后应拒绝删除")
+	}
+}
+
+func TestWindowsCopiesAreReviewOnly(t *testing.T) {
+	prev := goos
+	goos = "windows"
+	t.Cleanup(func() { goos = prev })
+
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	versions := filepath.Join(home, ".local/share/claude/versions")
+	for _, v := range []string{"1.0.0.exe", "1.1.0.exe", "1.2.0.exe"} {
+		write(t, filepath.Join(versions, v))
+	}
+	// 入口是复制品，不是指向版本目录的链接
+	write(t, filepath.Join(home, ".local/bin/claude.exe"))
+
+	releases := filepath.Join(home, ".codex/packages/standalone/releases")
+	write(t, filepath.Join(releases, "0.1.0", "bin/codex.exe"))
+	write(t, filepath.Join(releases, "0.2.0", "bin/codex.exe"))
+	write(t, filepath.Join(home, ".codex/packages/standalone/current"))
+
+	downloads := filepath.Join(home, ".grok/downloads")
+	write(t, filepath.Join(downloads, "grok-1.0.41-windows-x64.exe"))
+	write(t, filepath.Join(downloads, "grok-1.0.42-windows-x64.exe"))
+	write(t, filepath.Join(home, ".grok/bin/grok.exe"))
+	write(t, filepath.Join(home, ".grok/bin/agent.exe"))
+
+	write(t, filepath.Join(home, ".opencode/bin/opencode.exe"))
+	write(t, filepath.Join(home, ".local/bin/opencode.exe"))
+	write(t, filepath.Join(home, ".opencode/bin/opencode-1.2.3.exe"))
+
+	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	got := scan(t, s)
+
+	for _, rel := range []string{
+		".local/share/claude/versions/1.0.0.exe",
+		".local/share/claude/versions/1.1.0.exe",
+		".codex/packages/standalone/releases/0.1.0",
+		".grok/downloads/grok-1.0.41-windows-x64.exe",
+	} {
+		it, ok := got[rel]
+		if !ok || it.Category != CatReview || it.Selectable {
+			t.Errorf("%s 应只展示不删除，实际 %+v", rel, it)
+		}
+	}
+	bak := got[".opencode/bin/opencode-1.2.3.exe"]
+	if bak.Category != CatReview {
+		t.Errorf("Windows 备份应进入待核查：%+v", bak)
 	}
 }

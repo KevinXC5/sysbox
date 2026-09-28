@@ -4,19 +4,14 @@
 
 # sysbox
 
-个人 macOS 维护工具箱：把零散的清理、进程治理和工具更新脚本收进一个终端界面。
-
-https://github.com/user-attachments/assets/eaf42703-ec6b-4a27-bca4-f989d6cfa4c9
+跨平台的系统维护工具箱：把零散的清理和工具更新脚本收进一个终端界面，支持 macOS、Windows 与 Linux。
 
 ## 功能
 
 | 分组 | 工具 | 作用 |
 |---|---|---|
-| 清理 | JetBrains 缓存 | 清理索引、编译缓存与 IDE 日志；跳过需要重新下载的 Agent 与补全模型，不碰 Application Support |
+| 清理 | JetBrains 缓存 | 清理索引、编译缓存与 IDE 日志；跳过需要重新下载的 Agent 与补全模型，不碰设置与插件目录 |
 | 清理 | Agent 垃圾 | 清理 Claude、Codex、OpenCode 等超过保留期的缓存和日志，以及可以确认的旧版本 |
-| 进程治理 | appstoreagent | 识别 ArcadeManager 死循环，禁用自动拉起并结束进程，修复后一键恢复 |
-| 进程治理 | CursorUIViewService | 分析进程打开的文件，定位关联的第三方 App、输入法、废纸篓资源与网络连接 |
-| 进程治理 | 深信服客户端 | 彻底停止或恢复 aTrust 与 VDI 客户端，压住 ecosystemd 的高 CPU |
 | 工具 | Claude Code 更新 | 断点续传下载指定版本，SHA-256 校验后调用官方安装 |
 | 工具 | Obsidian 目录链接 | 把工作目录按一级子目录选择性地链接进 Obsidian 库 |
 
@@ -24,13 +19,23 @@ https://github.com/user-attachments/assets/eaf42703-ec6b-4a27-bca4-f989d6cfa4c9
 
 ## 安装
 
-只支持 macOS（Apple 芯片与 Intel 均可）。
+支持 macOS、Windows 与 Linux，x86_64 与 ARM 架构均可。
+
+macOS 与 Linux：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.sh | bash
 ```
 
 默认安装到 `~/.local/bin/sysbox`，可用 `SYSBOX_INSTALL_DIR` 指定目录，用 `SYSBOX_VERSION=v0.1.12` 安装指定版本。
+
+Windows（PowerShell）：
+
+```powershell
+irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
+```
+
+默认安装到 `%LOCALAPPDATA%\Programs\sysbox` 并加入用户 PATH，同样支持 `SYSBOX_INSTALL_DIR` 与 `SYSBOX_VERSION` 环境变量。建议使用 Windows Terminal 运行。
 
 ## 升级
 
@@ -56,7 +61,7 @@ sysbox version         # 显示版本号
 
 ## 配置
 
-配置文件位于 `~/.config/sysbox/config.json`，所有字段都可省略：
+配置文件位于 `~/.config/sysbox/config.json`（遵循 `XDG_CONFIG_HOME`），Windows 上位于 `%APPDATA%\sysbox\config.json`。所有字段都可省略：
 
 ```json
 {
@@ -85,14 +90,13 @@ sysbox version         # 显示版本号
 | | |
 |---|---|
 | ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) | ![确认弹窗](docs/screenshots/dark/03-jetbrains-confirm.png) |
-| ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) | ![appstoreagent](docs/screenshots/dark/06-appstore.png) |
-| ![深信服客户端](docs/screenshots/dark/08-sangfor.png) | ![CursorUIViewService](docs/screenshots/dark/09-cursorui.png) |
+| ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) | ![Agent 垃圾](docs/screenshots/dark/05-agent.png) |
 | ![Claude Code 更新](docs/screenshots/dark/10-claude.png) | ![Obsidian 目录链接](docs/screenshots/dark/11-obsidian.png) |
 
 浅色主题：
 
 | | |
 |---|---|
-| ![首页](docs/screenshots/light/01-home.png) | ![JetBrains 缓存](docs/screenshots/light/02-jetbrains.png) |
+| ![JetBrains 缓存](docs/screenshots/light/02-jetbrains.png) | ![Agent 垃圾](docs/screenshots/light/05-agent.png) |
 
 开发与贡献请参阅[开发指南](CONTRIBUTING.md)。

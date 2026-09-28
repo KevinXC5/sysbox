@@ -53,7 +53,7 @@ func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
 	sc := &scanner{home: s.Home, keep: time.Duration(s.KeepDays) * 24 * time.Hour, now: s.Now()}
 	sc.scanDirs(cacheDirs, CatCache, progress)
 	sc.scanDirs(logDirs, CatLog, progress)
-	for _, r := range versionRules {
+	for _, r := range versionRules() {
 		sc.scanVersions(r, progress)
 	}
 	sc.inspectBinaries(progress)
@@ -112,8 +112,12 @@ func (r ref) stillSafe(item string, now time.Time) error {
 		return errors.New("文件已被替换")
 	}
 	if r.activeLink != "" {
+		// 扫描时靠链接确认的当前版本，删除前必须仍是链接；复制品无法再确认，拒绝删除
+		if !isSymlink(r.activeLink) {
+			return errors.New("当前版本链接异常")
+		}
 		active, err := filepath.EvalSymlinks(r.activeLink)
-		if err != nil || !isSymlink(r.activeLink) {
+		if err != nil {
 			return errors.New("当前版本链接异常")
 		}
 		if filepath.Dir(active) != r.root || active == item {

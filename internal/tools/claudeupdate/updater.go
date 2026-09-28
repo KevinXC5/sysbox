@@ -22,8 +22,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 // DefaultBaseURL 官方发布地址
@@ -148,16 +146,24 @@ func (u *Updater) newClient() *http.Client {
 }
 
 func (u *Updater) versionsDir() string {
-	return filepath.Join(u.opt.Home, ".local/share/claude/versions")
+	return filepath.Join(u.opt.Home, ".local", "share", "claude", "versions")
 }
 
 func (u *Updater) cacheDir() string {
-	return filepath.Join(u.opt.Home, ".local/share/claude/update-cache")
+	return filepath.Join(u.opt.Home, ".local", "share", "claude", "update-cache")
 }
 
-// Current 当前启用的版本：~/.local/bin/claude 指向的版本文件名
+// launcherName 官方安装器在用户目录下放置的启动文件名
+func launcherName() string {
+	if runtime.GOOS == "windows" {
+		return "claude.exe"
+	}
+	return "claude"
+}
+
+// Current 当前启用的版本：~/.local/bin/claude（Windows 为 claude.exe）指向的版本文件名
 func Current(home string) string {
-	target, err := filepath.EvalSymlinks(filepath.Join(home, ".local/bin/claude"))
+	target, err := filepath.EvalSymlinks(filepath.Join(home, ".local", "bin", launcherName()))
 	if err != nil {
 		return ""
 	}
@@ -165,20 +171,6 @@ func Current(home string) string {
 		return v
 	}
 	return ""
-}
-
-// Platform 当前平台标识；在 Apple 芯片上经 Rosetta 转译运行的 x64 版本按 arm64 处理
-func Platform() (string, error) {
-	switch runtime.GOARCH {
-	case "arm64":
-		return "darwin-arm64", nil
-	case "amd64":
-		if v, err := unix.SysctlUint32("sysctl.proc_translated"); err == nil && v == 1 {
-			return "darwin-arm64", nil
-		}
-		return "darwin-x64", nil
-	}
-	return "", fmt.Errorf("不支持的架构：%s", runtime.GOARCH)
 }
 
 // Result 更新结果
@@ -232,7 +224,7 @@ func (u *Updater) Run(ctx context.Context, target string) (Result, error) {
 	res.Version = version
 	u.emit(Event{Stage: StageManifest, Msg: fmt.Sprintf("目标版本 %s，平台 %s", version, platform)})
 
-	checksum, err := u.checksum(ctx, version, platform)
+	checksum, binary, err := u.release(ctx, version, platform)
 	if err != nil {
 		return res, err
 	}
@@ -247,7 +239,7 @@ func (u *Updater) Run(ctx context.Context, target string) (Result, error) {
 	if err := os.MkdirAll(u.cacheDir(), 0o755); err != nil {
 		return res, err
 	}
-	dest := filepath.Join(u.versionsDir(), version)
+	dest := filepath.Join(u.versionsDir(), version+binaryExt(binary))
 	if err := regularOrMissing(dest); err != nil {
 		return res, err
 	}
@@ -255,20 +247,20 @@ func (u *Updater) Run(ctx context.Context, target string) (Result, error) {
 		res.Cached = true
 		u.emit(Event{Stage: StageDownload, Msg: "本地已有该版本且校验通过，跳过下载"})
 	} else {
-		part := filepath.Join(u.cacheDir(), version+"-"+platform+".part")
-		url := fmt.Sprintf("%s/%s/%s/claude", u.opt.BaseURL, version, platform)
+		part := filepath.Join(u.cacheDir(), version+"-"+platform+binaryExt(binary)+".part")
+		url := fmt.Sprintf("%s/%s/%s/%s", u.opt.BaseURL, version, platform, binary)
 		if err := u.download(ctx, url, part, checksum); err != nil {
 			return res, err
 		}
 		// 半成品只留在缓存目录，校验通过后才移入版本目录
-		if err := os.Chmod(part, 0o755); err != nil {
+		if err := makeExecutable(part); err != nil {
 			return res, err
 		}
 		if err := os.Rename(part, dest); err != nil {
 			return res, err
 		}
 	}
-	if err := os.Chmod(dest, 0o755); err != nil {
+	if err := makeExecutable(dest); err != nil {
 		return res, err
 	}
 
@@ -315,28 +307,62 @@ func (u *Updater) get(ctx context.Context, url string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
 
-// checksum 从发布清单读取指定平台的 SHA-256
-func (u *Updater) checksum(ctx context.Context, version, platform string) (string, error) {
+// binaryNameRe 发布清单给出的文件名只允许 claude 或 claude.exe，避免路径穿越
+var binaryNameRe = regexp.MustCompile(`^claude(\.exe)?$`)
+
+// defaultBinary 清单未给出文件名时的回退：Windows 平台为 claude.exe，其余为 claude
+func defaultBinary(platform string) string {
+	if strings.HasPrefix(platform, "win32-") {
+		return "claude.exe"
+	}
+	return "claude"
+}
+
+// binaryExt 版本目录与缓存文件保留 .exe 后缀，其余平台不带后缀
+func binaryExt(binary string) string {
+	return filepath.Ext(binary)
+}
+
+// release 从发布清单读取指定平台的 SHA-256 与二进制文件名。
+// 较新的清单带 binary 字段；旧清单没有该字段时按平台回退。
+func (u *Updater) release(ctx context.Context, version, platform string) (checksum, binary string, err error) {
 	body, err := u.fetch(ctx, fmt.Sprintf("%s/%s/manifest.json", u.opt.BaseURL, version))
 	if err != nil {
-		return "", fmt.Errorf("获取发布清单失败：%w", err)
+		return "", "", fmt.Errorf("获取发布清单失败：%w", err)
 	}
 	var m struct {
 		Platforms map[string]struct {
+			Binary   string `json:"binary"`
 			Checksum string `json:"checksum"`
 		} `json:"platforms"`
 	}
 	if err := json.Unmarshal(body, &m); err != nil {
-		return "", fmt.Errorf("发布清单无效：%w", err)
+		return "", "", fmt.Errorf("发布清单无效：%w", err)
 	}
 	p, ok := m.Platforms[platform]
 	if !ok {
-		return "", fmt.Errorf("发布清单不支持平台 %s", platform)
+		return "", "", fmt.Errorf("发布清单不支持平台 %s", platform)
 	}
 	if !checksumRe.MatchString(p.Checksum) {
-		return "", errors.New("发布清单中的 SHA-256 无效")
+		return "", "", errors.New("发布清单中的 SHA-256 无效")
 	}
-	return p.Checksum, nil
+	binary = p.Binary
+	if binary == "" {
+		binary = defaultBinary(platform)
+	}
+	if !binaryNameRe.MatchString(binary) {
+		return "", "", fmt.Errorf("发布清单中的二进制文件名无效：%s", binary)
+	}
+	return p.Checksum, binary, nil
+}
+
+// makeExecutable 给已下载的二进制加上可执行权限。
+// Windows 不依赖 Unix 权限位，Chmod 在部分文件系统上还会失败，因此跳过。
+func makeExecutable(p string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return os.Chmod(p, 0o755)
 }
 
 // regularOrMissing 路径不存在，或是普通文件（不能是链接或目录）
@@ -408,11 +434,16 @@ func (u *Updater) installEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
-		if !proxyKeys[k] && k != "HOME" {
-			env = append(env, kv)
+		// Windows 上官方安装器按 USERPROFILE 落盘，和 HOME 一起改到指定家目录
+		if proxyKeys[k] || k == "HOME" || (runtime.GOOS == "windows" && k == "USERPROFILE") {
+			continue
 		}
+		env = append(env, kv)
 	}
 	env = append(env, "HOME="+u.opt.Home)
+	if runtime.GOOS == "windows" {
+		env = append(env, "USERPROFILE="+u.opt.Home)
+	}
 	if u.opt.Proxy == "" {
 		return append(env, "NO_PROXY=*", "no_proxy=*")
 	}

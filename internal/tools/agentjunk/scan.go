@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/KevinXC5/sysbox/internal/cleanup"
@@ -101,12 +102,25 @@ func noteFor(cat int, latest, now time.Time) string {
 func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	root := filepath.Join(s.home, r.Dir)
 	link := filepath.Join(s.home, r.Link)
-	if !plainDir(root) || !isSymlink(link) {
+	if !plainDir(root) {
+		return
+	}
+	// 入口不存在时没有可确认的当前版本，整组跳过，避免把全部历史版本都标成待核查
+	if _, err := os.Lstat(link); err != nil {
 		return
 	}
 	progress("检查 " + r.Agent + " 旧版本")
 	review := func(note string) {
 		s.items = append(s.items, cleanup.Item{Path: link, Name: r.Link, Group: r.Agent, Category: CatReview, Note: note})
+	}
+	// Windows 原生安装把入口复制成普通 exe，无法用链接判断当前版本。
+	// 宁可整组只展示，也不把可能正在使用的版本标成可删。
+	if r.linkOnly && !isSymlink(link) {
+		s.reviewCopies(root, r, "入口不是符号链接，无法确认当前版本")
+		return
+	}
+	if !isSymlink(link) {
+		return
 	}
 
 	active, err := filepath.EvalSymlinks(link)
@@ -151,7 +165,8 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 		return
 	}
 	for _, e := range dirEntries {
-		v, ok := parseVersion(e.Name(), r.Pattern)
+		name := versionBase(e.Name())
+		v, ok := parseVersion(name, r.Pattern)
 		wantDir := r.Executable != ""
 		if ok && e.Type()&os.ModeSymlink == 0 && e.IsDir() == wantDir {
 			entries = append(entries, entry{filepath.Join(root, e.Name()), v})
@@ -175,4 +190,31 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 			s.add(e.path, root, r.Agent, CatOld, 0, link, others)
 		}
 	}
+}
+
+// versionBase 去掉版本文件名末尾的 .exe，让 2.1.3.exe 仍按 semver 解析。
+// 只看名字本身：测试在 macOS 上模拟 Windows 布局时也要能剥掉。
+func versionBase(name string) string {
+	return strings.TrimSuffix(name, ".exe")
+}
+
+// reviewCopies 无法确认当前版本时，把版本目录里的候选都标成待核查
+func (s *scanner) reviewCopies(root string, r versionRule, note string) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		s.errItem(root, r.Agent, err)
+		return
+	}
+	wantDir := r.Executable != ""
+	var paths []string
+	for _, e := range entries {
+		if _, ok := parseVersion(versionBase(e.Name()), r.Pattern); !ok {
+			continue
+		}
+		if e.Type()&os.ModeSymlink != 0 || e.IsDir() != wantDir {
+			continue
+		}
+		paths = append(paths, filepath.Join(root, e.Name()))
+	}
+	s.reviewAll(paths, r.Agent, note)
 }

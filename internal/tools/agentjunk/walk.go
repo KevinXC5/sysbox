@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
+
+	"github.com/KevinXC5/sysbox/internal/fsx"
 )
 
 // errForeignLink 目录内出现了不能安全处理的符号链接
@@ -20,7 +21,7 @@ func usage(item string, allowInternalLinks bool) (size int64, latest time.Time, 
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	size, latest = blocks(info), info.ModTime()
+	size, latest = fsx.AllocSize(info), info.ModTime()
 	if !info.IsDir() {
 		return size, latest, nil
 	}
@@ -48,7 +49,7 @@ func usage(item string, allowInternalLinks bool) (size int64, latest time.Time, 
 				return errForeignLink
 			}
 		}
-		size += blocks(fi)
+		size += fsx.AllocSize(fi)
 		if fi.ModTime().After(latest) {
 			latest = fi.ModTime()
 		}
@@ -57,27 +58,10 @@ func usage(item string, allowInternalLinks bool) (size int64, latest time.Time, 
 	return size, latest, err
 }
 
-func blocks(fi fs.FileInfo) int64 {
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return st.Blocks * 512
-	}
-	return fi.Size()
-}
+// identity 文件标识，删除前用来确认目标没有被替换
+type identity = fsx.FileID
 
-// identity 设备号与 inode，删除前用来确认目标没有被替换
-type identity struct{ dev, ino uint64 }
-
-func identify(p string) (identity, error) {
-	fi, err := os.Lstat(p)
-	if err != nil {
-		return identity{}, err
-	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return identity{}, errors.New("无法读取文件标识")
-	}
-	return identity{uint64(st.Dev), st.Ino}, nil
-}
+func identify(p string) (identity, error) { return fsx.Identify(p) }
 
 // plainDir 路径是真实目录，且自身及各级父目录都不是符号链接
 func plainDir(p string) bool {

@@ -1,5 +1,5 @@
 // Package jetbrains 清理 JetBrains 本地缓存。
-// 只处理 Caches/JetBrains 和 Logs/JetBrains，不碰 Application Support。
+// 只处理缓存目录和日志目录，不碰配置、插件本体等用户数据。
 package jetbrains
 
 import (
@@ -27,30 +27,39 @@ var categories = []cleanup.Category{
 	CatLeftover: {Label: "未覆盖", Sub: "只展示不删", Tone: cleanup.ToneMuted},
 }
 
-// Options 扫描与删除的根路径
+// Options 扫描与删除的根路径。
+// LogInsideCache 为真时日志在各产品缓存目录的 log 子目录里（Windows、Linux），
+// 为假时日志是独立根目录（macOS 的 ~/Library/Logs/JetBrains）。
 type Options struct {
-	Home       string
-	CacheRoot  string
-	LogRoot    string
-	AppSupport string
+	Home           string
+	CacheRoot      string
+	LogRoot        string
+	LogInsideCache bool
+	AppSupport     string // 配置与插件本体，只展示不删除
+	DataRoot       string // Linux 用户数据（插件等），只展示不删除；其他平台为空
+	// 完成页上的根目录标签，空时使用 macOS 默认文案
+	CacheLabel  string
+	LogLabel    string
+	ConfigLabel string
+	DataLabel   string
 }
 
 // ErrNoCache 缓存根目录不存在
 var ErrNoCache = errors.New("找不到 JetBrains 缓存目录")
 
-// DefaultOptions 返回 macOS 下的默认路径，根路径先解析符号链接
+// DefaultOptions 返回当前平台的默认路径，根路径先解析符号链接。
+// lookup 注入环境变量，测试不依赖真实系统。
 func DefaultOptions() (Options, error) {
-	home, err := os.UserHomeDir()
+	return optionsFrom(os.UserHomeDir, os.Getenv)
+}
+
+// optionsFrom 按平台拼出缓存、日志和配置根。home 失败时直接返回错误。
+func optionsFrom(homeDir func() (string, error), lookup func(string) string) (Options, error) {
+	home, err := homeDir()
 	if err != nil {
 		return Options{}, err
 	}
-	lib := filepath.Join(home, "Library")
-	return Options{
-		Home:       resolve(home),
-		CacheRoot:  resolve(filepath.Join(lib, "Caches", "JetBrains")),
-		LogRoot:    resolve(filepath.Join(lib, "Logs", "JetBrains")),
-		AppSupport: resolve(filepath.Join(lib, "Application Support", "JetBrains")),
-	}, nil
+	return platformOptions(resolve(home), lookup), nil
 }
 
 // resolve 解析符号链接；路径不存在时返回清理后的原路径
@@ -103,6 +112,13 @@ func Classify(o Options) ([]cleanup.Item, error) {
 		}
 		for _, c := range children {
 			cp := filepath.Join(p, c.Name())
+			// 日志在缓存目录内部时单独归到 Logs，避免和缓存子目录重复统计或按未知条目漏掉
+			if o.LogInsideCache && c.Name() == logDirName && c.IsDir() && c.Type()&fs.ModeSymlink == 0 {
+				items = append(items, with(cleanup.Item{
+					Path: cp, Name: c.Name(), Group: "Logs/" + top.Name(), IsDir: true,
+				}, CatClean, noteLog))
+				continue
+			}
 			if c.Name() == acpAgentsName && c.IsDir() && c.Type()&fs.ModeSymlink == 0 {
 				items = append(items, classifyAgents(cp, top.Name())...)
 				continue
@@ -111,15 +127,18 @@ func Classify(o Options) ([]cleanup.Item, error) {
 		}
 	}
 
-	// 日志整棵可删，IDE 下次启动会重建
-	if logs, err := os.ReadDir(o.LogRoot); err == nil {
-		for _, l := range logs {
-			items = append(items, with(cleanup.Item{
-				Path:  filepath.Join(o.LogRoot, l.Name()),
-				Name:  l.Name(),
-				Group: "Logs",
-				IsDir: l.IsDir(),
-			}, CatClean, noteLog))
+	// macOS 日志是独立根目录，整棵可删，IDE 下次启动会重建。
+	// 日志在缓存内部时上面已经处理，这里不再扫第二遍。
+	if !o.LogInsideCache && o.LogRoot != "" {
+		if logs, err := os.ReadDir(o.LogRoot); err == nil {
+			for _, l := range logs {
+				items = append(items, with(cleanup.Item{
+					Path:  filepath.Join(o.LogRoot, l.Name()),
+					Name:  l.Name(),
+					Group: "Logs",
+					IsDir: l.IsDir(),
+				}, CatClean, noteLog))
+			}
 		}
 	}
 	return items, nil

@@ -4,7 +4,6 @@ package theme
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -53,7 +52,7 @@ var (
 
 // Setup 初始化主题，必须在 Bubble Tea 接管终端之前调用。
 // 自动模式通过查询终端背景色判定深浅；其他模式下不查询终端，
-// 改用 macOS 外观设置作为之后切回自动模式时的依据。
+// 改用系统外观设置作为之后切回自动模式时的依据。
 func Setup(m Mode) {
 	lastSystemDark = SystemDark()
 	if m == Auto {
@@ -98,13 +97,6 @@ func UpdateSystemAppearance(dark bool) {
 	if mode == Auto {
 		lipgloss.SetHasDarkBackground(dark)
 	}
-}
-
-// SystemDark 读取 macOS 外观设置，浅色模式下该键不存在。
-// 此函数只读取系统状态，可在后台调用。
-func SystemDark() bool {
-	out, err := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle").Output()
-	return err == nil && strings.TrimSpace(string(out)) == "Dark"
 }
 
 // ac 构造自适应颜色
