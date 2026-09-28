@@ -131,7 +131,7 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	var others []string
 	for _, o := range r.OtherLinks {
 		p := filepath.Join(s.home, o)
-		if t, err := filepath.EvalSymlinks(p); err != nil || !isSymlink(p) || t != active {
+		if t, err := filepath.EvalSymlinks(p); err != nil || !isSymlink(p) || !samePath(t, active) {
 			review("命令链接指向不同版本，不自动判断旧版")
 			return
 		}
@@ -149,7 +149,7 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	} else if !fi.Mode().IsRegular() {
 		return
 	}
-	if filepath.Dir(active) != root {
+	if !samePath(filepath.Dir(active), root) {
 		review("当前版本链接未指向版本目录，不自动判断旧版")
 		return
 	}
@@ -174,7 +174,7 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	}
 	newest, found := -1, false
 	for i, e := range entries {
-		if e.path == active {
+		if samePath(e.path, active) {
 			found = true
 		}
 		if newest < 0 || compareVersion(e.v, entries[newest].v) > 0 {
@@ -186,7 +186,7 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 		return
 	}
 	for i, e := range entries {
-		if e.path != active && i != newest {
+		if !samePath(e.path, active) && i != newest {
 			s.add(e.path, root, r.Agent, CatOld, 0, link, others)
 		}
 	}

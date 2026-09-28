@@ -103,7 +103,8 @@ func TestInstall(t *testing.T) {
 	if string(got) != string(binary) || last != int64(len(binary)) {
 		t.Errorf("替换结果有误：%q，进度 %d", got, last)
 	}
-	if fi, _ := os.Stat(exe); fi.Mode().Perm() != 0o755 {
+	// Windows 没有可执行权限位，只在 Unix 上检查
+	if fi, _ := os.Stat(exe); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 {
 		t.Errorf("权限应为 755，实际 %v", fi.Mode().Perm())
 	}
 }

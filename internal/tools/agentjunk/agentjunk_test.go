@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -87,6 +88,10 @@ func mustLink(t *testing.T, target, link string) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, link); err != nil {
+		// Windows CI 默认没有创建符号链接的权限，reparse buffer 无效时跳过而不是失败
+		if runtime.GOOS == "windows" {
+			t.Skipf("无法创建符号链接：%v", err)
+		}
 		t.Fatal(err)
 	}
 }
@@ -100,7 +105,8 @@ func scan(t *testing.T, s *Source) map[string]cleanup.Item {
 	m := map[string]cleanup.Item{}
 	for _, it := range items {
 		rel, _ := filepath.Rel(s.Home, it.Path)
-		m[rel] = it
+		// 查找键统一用 "/"，避免 Windows 上 Rel 返回反斜杠对不上测试里的期望路径
+		m[filepath.ToSlash(rel)] = it
 	}
 	return m
 }
@@ -139,12 +145,17 @@ func TestRemoveRechecks(t *testing.T) {
 	items := scan(t, s)
 	old := items[".claude/cache/old"]
 
-	// 扫描后目录被替换成同名新目录，inode 变化必须拒绝删除
+	// 扫描后目录被替换成同名新目录，inode 变化必须拒绝删除。
+	// 先建好替身再换名：ext4 会立刻复用刚删目录的 inode，删完再重建会得到同一个号。
+	replacement := old.Path + ".replacement"
+	write(t, filepath.Join(replacement, "new.bin"))
+	setAge(t, replacement, 60)
 	if err := os.RemoveAll(old.Path); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(old.Path, "new.bin"))
-	setAge(t, old.Path, 60)
+	if err := os.Rename(replacement, old.Path); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Remove(old); err == nil {
 		t.Fatal("目标被替换后应拒绝删除")
 	}

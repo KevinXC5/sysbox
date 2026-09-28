@@ -98,7 +98,8 @@ func (s *Source) Remove(it cleanup.Item) error {
 }
 
 func (r ref) stillSafe(item string, now time.Time) error {
-	if !plainDir(r.root) || filepath.Dir(item) != r.root {
+	// 目录名在 Windows 上大小写不敏感，短路径展开后也不能按字符串判成“已改变”
+	if !plainDir(r.root) || !samePath(filepath.Dir(item), r.root) {
 		return errors.New("所在目录已改变")
 	}
 	if isSymlink(item) {
@@ -120,11 +121,12 @@ func (r ref) stillSafe(item string, now time.Time) error {
 		if err != nil {
 			return errors.New("当前版本链接异常")
 		}
-		if filepath.Dir(active) != r.root || active == item {
+		if !samePath(filepath.Dir(active), r.root) || samePath(active, item) {
 			return errors.New("当前版本已切换到该条目")
 		}
 		for _, o := range r.otherLinks {
-			if t, err := filepath.EvalSymlinks(o); err != nil || t != active {
+			t, err := filepath.EvalSymlinks(o)
+			if err != nil || !samePath(t, active) {
 				return errors.New("命令链接不一致")
 			}
 		}

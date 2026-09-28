@@ -365,6 +365,46 @@ func makeExecutable(p string) error {
 	return os.Chmod(p, 0o755)
 }
 
+// executablePath 返回实际交给 exec 的路径。
+// Windows 的 CreateProcess 只认带 .exe 后缀的文件；版本目录里的文件名来自发布清单，
+// 清单给出的 binary 已经带后缀时原样返回，否则复制一份带后缀的副本再执行。
+func executablePath(dest string) string {
+	if runtime.GOOS != "windows" || strings.EqualFold(filepath.Ext(dest), ".exe") {
+		return dest
+	}
+	// 不带后缀时 CreateProcess 会失败，exec.LookPath 还会改去 PATH 里找同名程序
+	exe := dest + ".exe"
+	if sameFile(dest, exe) {
+		return exe
+	}
+	in, err := os.Open(dest)
+	if err != nil {
+		return dest
+	}
+	defer in.Close()
+	out, err := os.OpenFile(exe, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err != nil {
+		return dest
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil || closeErr != nil {
+		_ = os.Remove(exe)
+		return dest
+	}
+	return exe
+}
+
+// sameFile 两路径是否指向同一文件，用于跳过已经存在的 .exe 副本
+func sameFile(a, b string) bool {
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return os.SameFile(fa, fb)
+}
+
 // regularOrMissing 路径不存在，或是普通文件（不能是链接或目录）
 func regularOrMissing(p string) error {
 	fi, err := os.Lstat(p)
@@ -403,7 +443,7 @@ func (u *Updater) install(ctx context.Context, dest, version string) error {
 	u.emit(Event{Stage: StageInstall, Msg: fmt.Sprintf("调用官方安装，最长等待 %d 秒", int(u.opt.InstallTimeout.Seconds()))})
 	ictx, cancel := context.WithTimeout(ctx, u.opt.InstallTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ictx, dest, "install", version)
+	cmd := exec.CommandContext(ictx, executablePath(dest), "install", version)
 	cmd.Env = u.installEnv()
 	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.CombinedOutput()

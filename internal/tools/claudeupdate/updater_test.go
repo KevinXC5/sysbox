@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,15 +19,61 @@ import (
 
 const testVersion = "2.1.999"
 
-// installScript 模拟官方安装子命令：校验参数，成功后建立启动链接
-const installScript = `#!/bin/bash
-[[ "$1" == install && "$2" == 2.1.999 ]] || exit 20
-[[ -z "${TEST_EXPECT_DIRECT:-}" || -z "${HTTPS_PROXY:-}" ]] || exit 19
-[[ -z "${TEST_INSTALL_SLEEP:-}" ]] || sleep "$TEST_INSTALL_SLEEP"
-[[ "${TEST_INSTALL_STATUS:-0}" == 0 ]] || exit "$TEST_INSTALL_STATUS"
-mkdir -p "$HOME/.local/bin"
-ln -sfn "$0" "$HOME/.local/bin/claude"
-`
+// fakeClaudeEnv 让测试二进制在被当作已下载的 claude 启动时进入假安装逻辑
+const fakeClaudeEnv = "SYSBOX_FAKE_CLAUDE"
+
+// TestMain 在测试二进制被当作 claude 重新执行时扮演官方安装子命令。
+// 下载下来的文件必须与发布清单的 SHA-256 一致，Windows 又无法执行 shell 脚本，
+// 因此测试直接复制自身二进制作为下载内容。
+func TestMain(m *testing.M) {
+	if os.Getenv(fakeClaudeEnv) == "1" {
+		os.Exit(fakeClaude())
+	}
+	os.Exit(m.Run())
+}
+
+// fakeClaude 模拟官方 install 子命令：校验参数，按环境变量失败或睡眠，成功后建立启动链接
+func fakeClaude() int {
+	args := os.Args[1:]
+	if len(args) != 2 || args[0] != "install" || args[1] != testVersion {
+		return 20
+	}
+	if os.Getenv("TEST_EXPECT_DIRECT") != "" && os.Getenv("HTTPS_PROXY") != "" {
+		return 19
+	}
+	if d := os.Getenv("TEST_INSTALL_SLEEP"); d != "" {
+		n, err := strconv.Atoi(d)
+		if err != nil {
+			return 21
+		}
+		time.Sleep(time.Duration(n) * time.Second)
+	}
+	if s := os.Getenv("TEST_INSTALL_STATUS"); s != "" && s != "0" {
+		code, err := strconv.Atoi(s)
+		if err != nil {
+			return 21
+		}
+		return code
+	}
+	home := os.Getenv("HOME")
+	if runtime.GOOS == "windows" {
+		// 安装环境同时改写了 USERPROFILE，链接落在指定家目录下
+		if profile := os.Getenv("USERPROFILE"); profile != "" {
+			home = profile
+		}
+	}
+	link := filepath.Join(home, ".local", "bin", launcherName())
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 22
+	}
+	_ = os.Remove(link)
+	if err := os.Symlink(os.Args[0], link); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 23
+	}
+	return 0
+}
 
 // fakeRelease 模拟发布服务，可注入各种网络故障
 type fakeRelease struct {
@@ -129,7 +176,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{t: t, home: t.TempDir(), srv: &fakeRelease{payload: []byte(installScript)}}
+	h := &harness{t: t, home: t.TempDir(), srv: &fakeRelease{payload: fakeClaudeBytes(t)}}
 	ts := httptest.NewServer(h.srv)
 	t.Cleanup(ts.Close)
 	h.url = ts.URL
@@ -141,7 +188,19 @@ func newHarness(t *testing.T) *harness {
 	return h
 }
 
+// fakeClaudeBytes 复制当前测试二进制，作为可在各平台执行的假 claude
+func fakeClaudeBytes(t *testing.T) []byte {
+	t.Helper()
+	b, err := os.ReadFile(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 func (h *harness) run(target string) (Result, error) {
+	// 子进程重新进入 TestMain 时据此扮演假 claude，而不是再跑一遍测试
+	h.t.Setenv(fakeClaudeEnv, "1")
 	u := New(h.opts, func(e Event) {
 		if e.Msg != "" {
 			h.logs = append(h.logs, e.Msg)
@@ -161,7 +220,7 @@ func (h *harness) versionFile() string {
 }
 
 func (h *harness) link() string {
-	return filepath.Join(h.home, ".local", "bin", "claude")
+	return filepath.Join(h.home, ".local", "bin", launcherName())
 }
 
 // oldInstall 预置一个旧版本并让链接指向它
@@ -171,7 +230,7 @@ func (h *harness) oldInstall() string {
 	if err := os.MkdirAll(filepath.Dir(old), 0o755); err != nil {
 		h.t.Fatal(err)
 	}
-	if err := os.WriteFile(old, []byte("#!/bin/bash\n"), 0o755); err != nil {
+	if err := os.WriteFile(old, []byte("old"), 0o755); err != nil {
 		h.t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Dir(h.link()), 0o755); err != nil {
@@ -262,7 +321,7 @@ func TestResumeAfterDisconnect(t *testing.T) {
 		t.Errorf("应在第二次尝试时续传完成：\n%s", h.log())
 	}
 	got, _ := os.ReadFile(h.versionFile())
-	if string(got) != installScript {
+	if string(got) != string(h.srv.payload) {
 		t.Error("续传后的文件内容不一致")
 	}
 }

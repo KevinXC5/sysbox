@@ -58,7 +58,7 @@ func (s *scanner) singleBinary(agent, entry, binary string, alias bool) {
 	if alias {
 		target, err := filepath.EvalSymlinks(entry)
 		realBinary, err2 := filepath.EvalSymlinks(binary)
-		same := err == nil && err2 == nil && target == realBinary
+		same := err == nil && err2 == nil && samePath(target, realBinary)
 		// Unix 上入口必须是指向本体的链接。Windows 常把入口复制成普通 exe，
 		// EvalSymlinks 会把两边都解成临时目录的真实路径，不能用来判断是不是同一份。
 		if goos == "windows" {

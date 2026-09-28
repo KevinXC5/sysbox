@@ -75,12 +75,17 @@ func unixConfigBase(lookup func(string) string) (string, error) {
 	return filepath.Join(home, ".config"), nil
 }
 
-// windowsConfigBase Windows：%APPDATA%，为空时回退到 os.UserConfigDir()
+// windowsConfigBase Windows：%APPDATA%，为空时回退到家目录下的 AppData\Roaming。
+// os.UserConfigDir 同样只读 APPDATA，不能作为回退。
 func windowsConfigBase(lookup func(string) string) (string, error) {
 	if dir := lookup("APPDATA"); dir != "" {
 		return dir, nil
 	}
-	return os.UserConfigDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "AppData", "Roaming"), nil
 }
 
 // Path 配置文件路径

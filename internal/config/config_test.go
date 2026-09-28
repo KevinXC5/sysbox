@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 )
@@ -61,14 +62,14 @@ func TestWindowsConfigBaseUsesAppData(t *testing.T) {
 }
 
 func TestWindowsConfigBaseFallsBack(t *testing.T) {
-	t.Setenv("APPDATA", "")
-	want, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
 	}
+	want := filepath.Join(home, "AppData", "Roaming")
 	got, err := windowsConfigBase(func(string) string { return "" })
 	if err != nil || got != want {
-		t.Fatalf("APPDATA 为空应回退 UserConfigDir，实际 %q，期望 %q，%v", got, want, err)
+		t.Fatalf("APPDATA 为空应回退到家目录下的 AppData\\Roaming，实际 %q，期望 %q，%v", got, want, err)
 	}
 }
 

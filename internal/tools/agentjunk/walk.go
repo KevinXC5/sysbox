@@ -63,14 +63,40 @@ type identity = fsx.FileID
 
 func identify(p string) (identity, error) { return fsx.Identify(p) }
 
-// plainDir 路径是真实目录，且自身及各级父目录都不是符号链接
+// plainDir 路径是真实目录，且自身及各级父目录都不是符号链接。
+// 不能拿 EvalSymlinks 的结果和原路径做字符串比较：Windows 上它会把 8.3 短路径
+// （os.TempDir 常见的 C:\Users\RUNNER~1\...）展开成长路径，并统一盘符大小写，
+// 真实目录也会被判成“含链接”，整组扫描因此被跳过。
 func plainDir(p string) bool {
-	fi, err := os.Lstat(p)
-	if err != nil || !fi.IsDir() {
+	p = filepath.Clean(p)
+	if p == "" || p == "." {
 		return false
 	}
-	real, err := filepath.EvalSymlinks(p)
-	return err == nil && real == p
+	vol := filepath.VolumeName(p)
+	for cur := p; len(cur) > len(vol); {
+		fi, err := os.Lstat(cur)
+		if err != nil || !fi.IsDir() || fi.Mode()&fs.ModeSymlink != 0 {
+			return false
+		}
+		next := filepath.Dir(cur)
+		if next == cur {
+			break
+		}
+		cur = next
+	}
+	return true
+}
+
+// samePath 判断两条路径是否指向同一位置。Windows 忽略大小写，分隔符统一后再比。
+func samePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if a == b {
+		return true
+	}
+	if goos == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return false
 }
 
 // isSymlink 路径本身是否为符号链接
@@ -79,7 +105,11 @@ func isSymlink(p string) bool {
 	return err == nil && fi.Mode()&fs.ModeSymlink != 0
 }
 
-// within 判断 p 是否等于 root 或位于其下
+// within 判断 p 是否等于 root 或位于其下。Windows 路径大小写不敏感。
 func within(p, root string) bool {
-	return p == root || strings.HasPrefix(p, root+string(filepath.Separator))
+	sep := string(filepath.Separator)
+	if goos == "windows" {
+		p, root = strings.ToLower(filepath.Clean(p)), strings.ToLower(filepath.Clean(root))
+	}
+	return p == root || strings.HasPrefix(p, root+sep)
 }
