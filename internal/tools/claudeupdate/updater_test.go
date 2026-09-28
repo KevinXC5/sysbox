@@ -338,7 +338,7 @@ func TestResumeAfterDisconnect(t *testing.T) {
 // 服务器不支持续传时，同一次尝试内改为从头下载
 func TestRangeIgnoredRestartsInPlace(t *testing.T) {
 	h := newHarness(t)
-	part := filepath.Join(h.home, ".local", "share", "claude", "update-cache", testVersion+"-"+hostPlatform()+".part")
+	part := filepath.Join(h.home, ".local", "share", "claude", "update-cache", testVersion+"-"+hostPlatform()+binaryExt(defaultBinary(hostPlatform()))+".part")
 	if err := os.MkdirAll(filepath.Dir(part), 0o755); err != nil {
 		t.Fatal(err)
 	}
