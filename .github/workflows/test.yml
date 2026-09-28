@@ -1,0 +1,33 @@
+# 推送到 main、提交 PR 时执行测试；发布工作流也会先调用这里。
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: 检查格式
+        if: runner.os == 'macOS'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: 静态检查
+        run: go vet ./...
+      - name: 测试
+        run: go test ./...

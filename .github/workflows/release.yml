@@ -1,76 +1,55 @@
-# 推送到 main 时自动测试、编译并发布新版本；只改文档不会触发发布。
-# 版本号 = VERSION 文件中的主次版本号 + 本工作流的运行序号，例如 v0.1.23。
+# 推送 v* 标签时测试、编译并发布该版本；推送到 main 只执行测试，不会发布。
+# 版本号即标签名，例如 v0.1.23，可用 make release 打下一个补丁版本。
 name: release
 
 on:
   push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-  pull_request:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      publish:
-        description: "测试通过后发布新版本"
-        type: boolean
-        default: true
+      tag:
+        description: "要发布的已有标签，例如 v0.1.23"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - name: 检查格式
-        if: runner.os == 'macOS'
-        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
-      - name: 静态检查
-        run: go vet ./...
-      - name: 测试
-        run: go test ./...
+    uses: ./.github/workflows/test.yml
 
   release:
     needs: test
-    # 跳过发布时仍执行测试；手动运行可独立选择是否发布。
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'push' && vars.AUTO_RELEASE != 'false' &&
-      !contains(github.event.head_commit.message, '[skip release]')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish))
     runs-on: macos-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: 计算版本号
-        id: version
-        run: echo "tag=v$(tr -d '[:space:]' < VERSION).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - name: 检查标签
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "标签格式应为 vX.Y.Z：$TAG"; exit 1; }
+          # 只从 main 发布，避免分支上的临时提交成为正式版本
+          git merge-base --is-ancestor "$TAG" origin/main || { echo "$TAG 不在 main 上"; exit 1; }
       - name: 生成更新日志
         env:
-          GH_TOKEN: ${{ github.token }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          previous=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')
-          bash scripts/release-notes.sh "$GITHUB_SHA" "$previous" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/release-notes.md"
+          # 上一个版本取当前标签之前最近的标签
+          previous=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          bash scripts/release-notes.sh "$TAG" "$previous" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
       - name: 编译
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
         run: |
           mkdir -p dist
           ldflags="-s -w -X github.com/KevinXC5/sysbox/internal/meta.Version=$TAG"
@@ -88,10 +67,9 @@ jobs:
       - name: 发布
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
         run: |
           gh release create "$TAG" dist/* \
+            --verify-tag \
             --title "$TAG" \
-            --target "$GITHUB_SHA" \
             --notes-file "$RUNNER_TEMP/release-notes.md" \
             --latest
