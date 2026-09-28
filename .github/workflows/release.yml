@@ -46,7 +46,8 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          # 来源依次为：本次改过的 RELEASE_NOTES.md、DeepSeek 根据提交说明整理、按约定式提交类型整理
+          # 由 DeepSeek 根据上个标签以来的提交说明整理；没有密钥或调用失败时停止发布
+          [ -n "$DEEPSEEK_API_KEY" ] || { echo "::error::未配置 DEEPSEEK_API_KEY，无法生成更新说明"; exit 1; }
           previous=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
           if [ -n "$previous" ]; then
             range="$previous..$TAG"
@@ -56,14 +57,8 @@ jobs:
             url="https://github.com/$GITHUB_REPOSITORY/commits/$TAG"
           fi
 
-          notes=
-          if [ -z "$previous" ] || ! git diff --quiet "$previous" "$TAG" -- RELEASE_NOTES.md; then
-            notes=$(git show "$TAG:RELEASE_NOTES.md" 2>/dev/null || true)
-          fi
-
-          if [ -z "${notes//[[:space:]]/}" ] && [ -n "$DEEPSEEK_API_KEY" ]; then
-            commits=$(git log --reverse --no-merges --format='- %s%n%b' "$range")
-            prompt="下面是 sysbox（macOS 与 Windows 上的终端系统维护工具箱）自上一版本以来的 git 提交说明。
+          commits=$(git log --reverse --no-merges --format='- %s%n%b' "$range")
+          prompt="下面是 sysbox（macOS 与 Windows 上的终端系统维护工具箱）自上一版本以来的 git 提交说明。
           请据此写一份面向用户的简体中文更新说明，使用 Markdown：
           - 开头用一句话概括本次更新的价值；
           - 再按实际内容分为“新增功能”“使用体验”“问题修复”“升级注意事项”等二级标题，没有内容的分类不写；
@@ -73,21 +68,12 @@ jobs:
 
           提交说明：
           $commits"
-            notes=$(curl -fsS --max-time 300 https://api.deepseek.com/chat/completions \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-              -d "$(jq -n --arg prompt "$prompt" '{model: "deepseek-v4-flash", messages: [{role: "user", content: $prompt}]}')" |
-              jq -r '.choices[0].message.content // empty') || notes=
-            [ -n "${notes//[[:space:]]/}" ] || echo "DeepSeek 整理失败，改为按提交类型整理"
-          fi
-
-          if [ -z "${notes//[[:space:]]/}" ]; then
-            # 只列用户能感知的 feat、perf、fix，去掉提交前缀
-            pick() { git log --reverse --no-merges --format=%s "$range" | sed -nE "s/^$1(\([^)]*\))?!?: *(.+)$/- \2/p"; }
-            section() { if [ -n "$2" ]; then printf '## %s\n\n%s\n\n' "$1" "$2"; fi; }
-            notes=$(section 新增功能 "$(pick feat)"; section 使用体验 "$(pick perf)"; section 问题修复 "$(pick fix)")
-            [ -n "$notes" ] || notes="本次为内部维护更新，功能无变化。"
-          fi
+          notes=$(curl -fsS --max-time 300 https://api.deepseek.com/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+            -d "$(jq -n --arg prompt "$prompt" '{model: "deepseek-v4-flash", messages: [{role: "user", content: $prompt}]}')" |
+            jq -r '.choices[0].message.content // empty')
+          [ -n "${notes//[[:space:]]/}" ] || { echo "::error::DeepSeek 没有返回更新说明"; exit 1; }
 
           printf '%s\n\n[完整变更记录](%s)\n' "$notes" "$url" > "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md"
