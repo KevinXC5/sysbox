@@ -122,3 +122,37 @@ func TestInstallRejectsBadChecksum(t *testing.T) {
 		t.Error("校验失败时不应替换当前版本")
 	}
 }
+
+func TestPending(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[
+			{"tag_name":"v0.1.9","body":"旧版本"},
+			{"tag_name":"v0.1.12","body":"b"},
+			{"tag_name":"v0.2.0","draft":true},
+			{"tag_name":"v0.1.13","prerelease":true},
+			{"tag_name":"v0.1.11","body":"a"},
+			{"tag_name":"v0.1.10","body":"当前"}]`)
+	}))
+	t.Cleanup(srv.Close)
+	c := &Client{Repo: "o/r", APIBase: srv.URL, HTTP: srv.Client()}
+	got, err := c.Pending(context.Background(), "v0.1.10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tags []string
+	for _, r := range got {
+		tags = append(tags, r.Tag)
+	}
+	if fmt.Sprint(tags) != "[v0.1.12 v0.1.11]" {
+		t.Errorf("Pending = %v，期望 [v0.1.12 v0.1.11]", tags)
+	}
+}
+
+func TestNotes(t *testing.T) {
+	body := "\r\n本次更新\r\n\r\n## 问题修复\r\n\r\n- 修复 A  \r\n\r\n[完整变更记录](https://example.com)\r\n"
+	got := Notes(body)
+	want := []string{"本次更新", "", "## 问题修复", "", "- 修复 A"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("Notes = %q，期望 %q", got, want)
+	}
+}

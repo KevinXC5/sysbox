@@ -116,12 +116,23 @@ func runUpdate() int {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	c := selfupdate.NewClient(meta.Repo)
-	rel, err := c.Latest(ctx)
+	pending, err := c.Pending(ctx, meta.Version)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "查询最新版本失败：", err)
+		fmt.Fprintln(os.Stderr, "查询新版本失败：", err)
 		return 1
 	}
-	if !meta.IsDev() && !selfupdate.Newer(rel.Tag, meta.Version) {
+	var rel selfupdate.Release
+	switch {
+	case len(pending) > 0:
+		rel = pending[0]
+	case meta.IsDev():
+		// 本地构建没有可比较的版本号，直接安装最新发布
+		if rel, err = c.Latest(ctx); err != nil {
+			fmt.Fprintln(os.Stderr, "查询最新版本失败：", err)
+			return 1
+		}
+		pending = []selfupdate.Release{rel}
+	default:
 		fmt.Printf("已是最新版本 %s\n", meta.Version)
 		return 0
 	}
@@ -130,7 +141,17 @@ func runUpdate() int {
 		fmt.Fprintln(os.Stderr, "无法定位当前可执行文件：", err)
 		return 1
 	}
-	fmt.Printf("升级 %s → %s\n", meta.Version, rel.Tag)
+	fmt.Printf("升级 %s → %s\n\n更新内容：\n", meta.Version, rel.Tag)
+	for _, r := range pending {
+		fmt.Printf("\n%s\n", r.Tag)
+		for _, l := range selfupdate.Notes(r.Body) {
+			if l != "" {
+				l = "  " + l
+			}
+			fmt.Println(l)
+		}
+	}
+	fmt.Println()
 	last := time.Time{}
 	err = c.Install(ctx, rel, exe, func(done, total int64) {
 		if time.Since(last) > 200*time.Millisecond || done == total {

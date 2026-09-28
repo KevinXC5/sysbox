@@ -38,8 +38,8 @@ irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
 
 ## 升级
 
-- 界面启动时每天最多检查一次新版本，有更新时顶栏会提示，首页按 `u` 即可升级并重启
-- 也可以在命令行执行 `sysbox update`
+- 界面每次启动时检查一次新版本，有更新时顶栏会提示，首页按 `u` 查看更新内容并升级、重启
+- 也可以在命令行执行 `sysbox update`，升级前会列出更新内容
 - 在配置文件中设置 `"update": {"disable_check": true}` 可关闭自动检查
 
 ## 使用

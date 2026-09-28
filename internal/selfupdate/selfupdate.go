@@ -25,8 +25,11 @@ import (
 
 // Release 一个发布版本
 type Release struct {
-	Tag    string  `json:"tag_name"`
-	Assets []Asset `json:"assets"`
+	Tag        string  `json:"tag_name"`
+	Body       string  `json:"body"` // 发布说明，Markdown 格式
+	Draft      bool    `json:"draft"`
+	Prerelease bool    `json:"prerelease"`
+	Assets     []Asset `json:"assets"`
 }
 
 // Asset 发布附件

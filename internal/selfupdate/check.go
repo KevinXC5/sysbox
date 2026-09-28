@@ -3,52 +3,55 @@ package selfupdate
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"time"
+	"fmt"
+	"slices"
+	"strings"
 )
 
-// CheckInterval 自动检查的最短间隔
-const CheckInterval = 24 * time.Hour
-
-// cache 上次检查的结果，避免每次启动都访问 GitHub
-type cache struct {
-	CheckedAt time.Time `json:"checked_at"`
-	Latest    string    `json:"latest"`
-}
-
-func cachePath() (string, error) {
-	dir, err := os.UserCacheDir()
+// Pending 列出比 current 新的正式发布，按版本从新到旧排列；current 为 dev 时返回空列表
+func (c *Client) Pending(ctx context.Context, current string) ([]Release, error) {
+	resp, err := c.request(ctx, fmt.Sprintf("%s/repos/%s/releases?per_page=50", c.APIBase, c.Repo), "application/vnd.github+json")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return filepath.Join(dir, "sysbox", "update-check.json"), nil
-}
-
-// CheckCached 返回比 current 新的版本号，没有则返回空串。
-// 距上次检查不足 CheckInterval 时直接使用缓存结果，不访问网络。
-func (c *Client) CheckCached(ctx context.Context, current string) (string, error) {
-	p, err := cachePath()
-	if err != nil {
-		return "", err
+	defer resp.Body.Close()
+	var all []Release
+	if err := json.NewDecoder(resp.Body).Decode(&all); err != nil {
+		return nil, err
 	}
-	var ch cache
-	if b, err := os.ReadFile(p); err == nil {
-		_ = json.Unmarshal(b, &ch)
-	}
-	if time.Since(ch.CheckedAt) >= CheckInterval {
-		rel, err := c.Latest(ctx)
-		if err != nil {
-			return "", err
-		}
-		ch = cache{CheckedAt: time.Now(), Latest: rel.Tag}
-		if b, err := json.Marshal(ch); err == nil {
-			_ = os.MkdirAll(filepath.Dir(p), 0o755)
-			_ = os.WriteFile(p, b, 0o644)
+	var out []Release
+	for _, r := range all {
+		if !r.Draft && !r.Prerelease && Newer(r.Tag, current) {
+			out = append(out, r)
 		}
 	}
-	if Newer(ch.Latest, current) {
-		return ch.Latest, nil
+	slices.SortFunc(out, func(a, b Release) int {
+		switch {
+		case Newer(a.Tag, b.Tag):
+			return -1
+		case Newer(b.Tag, a.Tag):
+			return 1
+		}
+		return 0
+	})
+	return out, nil
+}
+
+// Notes 把发布说明整理成逐行文本：统一换行符，去掉末尾的“完整变更记录”链接和首尾空行
+func Notes(body string) []string {
+	var lines []string
+	for _, l := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
+		l = strings.TrimRight(l, " \t")
+		if strings.HasPrefix(l, "[完整变更记录]") {
+			continue
+		}
+		lines = append(lines, l)
 	}
-	return "", nil
+	for len(lines) > 0 && lines[0] == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }

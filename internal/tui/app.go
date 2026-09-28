@@ -60,7 +60,7 @@ func (a *App) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// checkUpdate 后台检查新版本；本地构建或在配置中关闭时跳过，出错静默忽略
+// checkUpdate 启动时在后台检查一次新版本；本地构建或在配置中关闭时跳过，出错静默忽略
 func (a *App) checkUpdate() tea.Cmd {
 	if meta.IsDev() || a.env.Config.Update.DisableCheck {
 		return nil
@@ -68,8 +68,11 @@ func (a *App) checkUpdate() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		v, _ := selfupdate.NewClient(meta.Repo).CheckCached(ctx, meta.Version)
-		return newVersionMsg{v}
+		rel, err := selfupdate.NewClient(meta.Repo).Latest(ctx)
+		if err != nil || !selfupdate.Newer(rel.Tag, meta.Version) {
+			return nil
+		}
+		return newVersionMsg{rel.Tag}
 	}
 }
 
