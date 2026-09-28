@@ -29,7 +29,7 @@ internal/
     app.go           根模型：路由、全局按键、顶栏底栏
     registry.go      工具注册表
     screens/         页面：首页、通用清理页及各工具页
-scripts/             演示环境与截图录制
+scripts/record.sh    录制 README 截图
 install.sh           macOS 安装脚本
 install.ps1          Windows 安装脚本
 ```

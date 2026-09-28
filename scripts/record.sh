@@ -6,7 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 go build -o bin/sysbox ./cmd/sysbox
-./scripts/demo-env.sh >/dev/null
+# 演示用的独立配置目录，不触碰真实配置
+rm -rf /tmp/sysbox-demo
+mkdir -p /tmp/sysbox-demo/config/sysbox
+echo '{ "update": { "disable_check": true } }' > /tmp/sysbox-demo/config/sysbox/config.json
 
 dark_theme='{ "name": "sysbox-night", "background": "#0E1325", "foreground": "#E2E8F0", "cursor": "#A78BFA", "selection": "#2A3350", "black": "#1A2138", "red": "#FB7185", "green": "#34D399", "yellow": "#FBBF24", "blue": "#60A5FA", "magenta": "#A78BFA", "cyan": "#22D3EE", "white": "#E2E8F0", "brightBlack": "#5B6785", "brightRed": "#FDA4AF", "brightGreen": "#6EE7B7", "brightYellow": "#FDE68A", "brightBlue": "#93C5FD", "brightMagenta": "#C4B5FD", "brightCyan": "#67E8F9", "brightWhite": "#F8FAFC" }'
 light_theme='{ "name": "sysbox-day", "background": "#FAFBFD", "foreground": "#1E293B", "cursor": "#7C3AED", "selection": "#E2E8F0", "black": "#1E293B", "red": "#E11D48", "green": "#059669", "yellow": "#C2410C", "blue": "#2563EB", "magenta": "#7C3AED", "cyan": "#0891B2", "white": "#E2E8F0", "brightBlack": "#64748B", "brightRed": "#F43F5E", "brightGreen": "#10B981", "brightYellow": "#EA580C", "brightBlue": "#3B82F6", "brightMagenta": "#8B5CF6", "brightCyan": "#06B6D4", "brightWhite": "#FFFFFF" }'

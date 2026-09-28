@@ -42,12 +42,54 @@ jobs:
           # 只从 main 发布，避免分支上的临时提交成为正式版本
           git merge-base --is-ancestor "$TAG" origin/main || { echo "$TAG 不在 main 上"; exit 1; }
       - name: 生成更新日志
+        shell: bash
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          # 上一个版本取当前标签之前最近的标签
+          # 来源依次为：本次改过的 RELEASE_NOTES.md、DeepSeek 根据提交说明整理、按约定式提交类型整理
           previous=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
-          bash scripts/release-notes.sh "$TAG" "$previous" "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/release-notes.md"
+          if [ -n "$previous" ]; then
+            range="$previous..$TAG"
+            url="https://github.com/$GITHUB_REPOSITORY/compare/$previous...$TAG"
+          else
+            range="$TAG"
+            url="https://github.com/$GITHUB_REPOSITORY/commits/$TAG"
+          fi
+
+          notes=
+          if [ -z "$previous" ] || ! git diff --quiet "$previous" "$TAG" -- RELEASE_NOTES.md; then
+            notes=$(git show "$TAG:RELEASE_NOTES.md" 2>/dev/null || true)
+          fi
+
+          if [ -z "${notes//[[:space:]]/}" ] && [ -n "$DEEPSEEK_API_KEY" ]; then
+            commits=$(git log --reverse --no-merges --format='- %s%n%b' "$range")
+            prompt="下面是 sysbox（macOS 与 Windows 上的终端系统维护工具箱）自上一版本以来的 git 提交说明。
+          请据此写一份面向用户的简体中文更新说明，使用 Markdown：
+          - 开头用一句话概括本次更新的价值；
+          - 再按实际内容分为“新增功能”“使用体验”“问题修复”“升级注意事项”等二级标题，没有内容的分类不写；
+          - 条目说明用户在什么场景下会遇到什么变化，相关提交合并为一条，用平实的语言；
+          - 只写用户能感知的变化，测试、重构、CI、文档等内部改动不写；如果没有用户能感知的变化，只输出“本次为内部维护更新，功能无变化。”；
+          - 不写提交前缀、提交哈希和工作流标记，不要任何开场白或结束语，只输出更新说明本身。
+
+          提交说明：
+          $commits"
+            notes=$(curl -fsS --max-time 300 https://api.deepseek.com/chat/completions \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+              -d "$(jq -n --arg prompt "$prompt" '{model: "deepseek-v4-flash", messages: [{role: "user", content: $prompt}]}')" |
+              jq -r '.choices[0].message.content // empty') || notes=
+            [ -n "${notes//[[:space:]]/}" ] || echo "DeepSeek 整理失败，改为按提交类型整理"
+          fi
+
+          if [ -z "${notes//[[:space:]]/}" ]; then
+            # 只列用户能感知的 feat、perf、fix，去掉提交前缀
+            pick() { git log --reverse --no-merges --format=%s "$range" | sed -nE "s/^$1(\([^)]*\))?!?: *(.+)$/- \2/p"; }
+            section() { if [ -n "$2" ]; then printf '## %s\n\n%s\n\n' "$1" "$2"; fi; }
+            notes=$(section 新增功能 "$(pick feat)"; section 使用体验 "$(pick perf)"; section 问题修复 "$(pick fix)")
+            [ -n "$notes" ] || notes="本次为内部维护更新，功能无变化。"
+          fi
+
+          printf '%s\n\n[完整变更记录](%s)\n' "$notes" "$url" > "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md"
       - name: 编译
         run: |
