@@ -84,7 +84,7 @@ type fakeRelease struct {
 	ignoreRange bool   // 不支持续传，总是返回完整内容
 	failOnce    int    // 第一次下载返回该状态码
 	binaryHits  int
-	platform    string // 清单与下载路径中的平台键，默认 darwin-arm64
+	platform    string // 清单与下载路径中的平台键，默认 hostPlatform()
 	binary      string // 写入清单的 binary；为空则省略该字段
 	file        string // 下载路径上的文件名，默认 claude
 }
@@ -112,7 +112,7 @@ func (f *fakeRelease) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (f *fakeRelease) plat() string {
 	if f.platform == "" {
-		return "darwin-arm64"
+		return hostPlatform()
 	}
 	return f.platform
 }
@@ -174,6 +174,15 @@ type harness struct {
 	opts Options
 }
 
+// hostPlatform 测试默认使用的平台键：下载的假安装程序要在本机执行，
+// Windows 上必须是带 .exe 的 win32 版本
+func hostPlatform() string {
+	if runtime.GOOS == "windows" {
+		return "win32-x64"
+	}
+	return "darwin-arm64"
+}
+
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{t: t, home: t.TempDir(), srv: &fakeRelease{payload: fakeClaudeBytes(t)}}
@@ -181,7 +190,7 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(ts.Close)
 	h.url = ts.URL
 	h.opts = Options{
-		BaseURL: ts.URL, Home: h.home, Platform: "darwin-arm64",
+		BaseURL: ts.URL, Home: h.home, Platform: hostPlatform(),
 		Attempts: 11, RetryDelay: time.Millisecond,
 		StallWindow: 5 * time.Second, StallBytes: 1, InstallTimeout: 10 * time.Second,
 	}
@@ -329,7 +338,7 @@ func TestResumeAfterDisconnect(t *testing.T) {
 // 服务器不支持续传时，同一次尝试内改为从头下载
 func TestRangeIgnoredRestartsInPlace(t *testing.T) {
 	h := newHarness(t)
-	part := filepath.Join(h.home, ".local", "share", "claude", "update-cache", testVersion+"-darwin-arm64.part")
+	part := filepath.Join(h.home, ".local", "share", "claude", "update-cache", testVersion+"-"+hostPlatform()+".part")
 	if err := os.MkdirAll(filepath.Dir(part), 0o755); err != nil {
 		t.Fatal(err)
 	}

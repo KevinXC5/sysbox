@@ -60,6 +60,10 @@ func write(t *testing.T, p string) {
 
 func fixture(t *testing.T) *Source {
 	t.Helper()
+	// 夹具按 Unix 布局搭建（入口不带 .exe），Windows 规则由专门的测试覆盖
+	prev := goos
+	goos = "linux"
+	t.Cleanup(func() { goos = prev })
 	home, _ := filepath.EvalSymlinks(t.TempDir())
 	cache := filepath.Join(home, ".claude/cache")
 	write(t, filepath.Join(cache, "old/a.bin"))
