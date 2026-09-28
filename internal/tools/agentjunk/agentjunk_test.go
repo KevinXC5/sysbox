@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -30,6 +31,12 @@ func TestCompareVersion(t *testing.T) {
 	if _, ok := parseVersion("grok-1.0.41-macos-aarch64", grokName); !ok {
 		t.Error("grok 版本名应能解析")
 	}
+	for _, name := range []string{"grok-1.0.41-macos-x86_64", "grok-1.2.0-windows-x64.exe", "grok-1.2.0-windows-arm64"} {
+		v, ok := parseVersion(name, grokName)
+		if !ok || !v.release {
+			t.Errorf("grok 版本名应解析为正式版：%s %+v", name, v)
+		}
+	}
 }
 
 // setAge 把路径及其下所有条目的修改时间设为 days 天前
@@ -53,6 +60,10 @@ func write(t *testing.T, p string) {
 
 func fixture(t *testing.T) *Source {
 	t.Helper()
+	// 夹具按 Unix 布局搭建（入口不带 .exe），Windows 规则由专门的测试覆盖
+	prev := goos
+	goos = "darwin"
+	t.Cleanup(func() { goos = prev })
 	home, _ := filepath.EvalSymlinks(t.TempDir())
 	cache := filepath.Join(home, ".claude/cache")
 	write(t, filepath.Join(cache, "old/a.bin"))
@@ -81,6 +92,10 @@ func mustLink(t *testing.T, target, link string) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, link); err != nil {
+		// Windows CI 默认没有创建符号链接的权限，reparse buffer 无效时跳过而不是失败
+		if runtime.GOOS == "windows" {
+			t.Skipf("无法创建符号链接：%v", err)
+		}
 		t.Fatal(err)
 	}
 }
@@ -94,7 +109,8 @@ func scan(t *testing.T, s *Source) map[string]cleanup.Item {
 	m := map[string]cleanup.Item{}
 	for _, it := range items {
 		rel, _ := filepath.Rel(s.Home, it.Path)
-		m[rel] = it
+		// 查找键统一用 "/"，避免 Windows 上 Rel 返回反斜杠对不上测试里的期望路径
+		m[filepath.ToSlash(rel)] = it
 	}
 	return m
 }
@@ -133,12 +149,17 @@ func TestRemoveRechecks(t *testing.T) {
 	items := scan(t, s)
 	old := items[".claude/cache/old"]
 
-	// 扫描后目录被替换成同名新目录，inode 变化必须拒绝删除
+	// 扫描后目录被替换成同名新目录，inode 变化必须拒绝删除。
+	// 先建好替身再换名：ext4 会立刻复用刚删目录的 inode，删完再重建会得到同一个号。
+	replacement := old.Path + ".replacement"
+	write(t, filepath.Join(replacement, "new.bin"))
+	setAge(t, replacement, 60)
 	if err := os.RemoveAll(old.Path); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(old.Path, "new.bin"))
-	setAge(t, old.Path, 60)
+	if err := os.Rename(replacement, old.Path); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Remove(old); err == nil {
 		t.Fatal("目标被替换后应拒绝删除")
 	}
@@ -162,5 +183,56 @@ func TestRemoveRejectsActiveSwitch(t *testing.T) {
 	mustLink(t, v.Path, link)
 	if err := s.Remove(v); err == nil {
 		t.Fatal("当前版本切换到该条目后应拒绝删除")
+	}
+}
+
+func TestWindowsCopiesAreReviewOnly(t *testing.T) {
+	prev := goos
+	goos = "windows"
+	t.Cleanup(func() { goos = prev })
+
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	versions := filepath.Join(home, ".local/share/claude/versions")
+	for _, v := range []string{"1.0.0.exe", "1.1.0.exe", "1.2.0.exe"} {
+		write(t, filepath.Join(versions, v))
+	}
+	// 入口是复制品，不是指向版本目录的链接
+	write(t, filepath.Join(home, ".local/bin/claude.exe"))
+
+	releases := filepath.Join(home, ".codex/packages/standalone/releases")
+	write(t, filepath.Join(releases, "0.1.0", "bin/codex.exe"))
+	write(t, filepath.Join(releases, "0.2.0", "bin/codex.exe"))
+	write(t, filepath.Join(home, ".codex/packages/standalone/current"))
+
+	downloads := filepath.Join(home, ".grok/downloads")
+	write(t, filepath.Join(downloads, "grok-1.0.41-windows-x64.exe"))
+	write(t, filepath.Join(downloads, "grok-1.0.42-windows-x64.exe"))
+	write(t, filepath.Join(home, ".grok/bin/grok.exe"))
+	write(t, filepath.Join(home, ".grok/bin/agent.exe"))
+
+	write(t, filepath.Join(home, ".opencode/bin/opencode.exe"))
+	write(t, filepath.Join(home, ".local/bin/opencode.exe"))
+	write(t, filepath.Join(home, ".opencode/bin/opencode-1.2.3.exe"))
+
+	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	got := scan(t, s)
+
+	for _, rel := range []string{
+		".local/share/claude/versions/1.0.0.exe",
+		".local/share/claude/versions/1.1.0.exe",
+		".codex/packages/standalone/releases/0.1.0",
+		".grok/downloads/grok-1.0.41-windows-x64.exe",
+	} {
+		it, ok := got[rel]
+		if !ok || it.Category != CatReview || it.Selectable {
+			t.Errorf("%s 应只展示不删除，实际 %+v", rel, it)
+		}
+	}
+	bak := got[".opencode/bin/opencode-1.2.3.exe"]
+	if bak.Category != CatReview {
+		t.Errorf("Windows 备份应进入待核查：%+v", bak)
 	}
 }

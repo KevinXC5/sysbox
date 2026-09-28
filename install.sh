@@ -16,13 +16,17 @@ info() { printf '\033[35m◆\033[0m %s\n' "$*"; }
 ok() { printf '\033[32m✓\033[0m %s\n' "$*"; }
 die() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
 
-[[ "$(uname -s)" == Darwin ]] || die "sysbox 只支持 macOS"
+[[ "$(uname -s)" == Darwin ]] || die "install.sh 只支持 macOS，Windows 请使用 install.ps1"
 
 # 在 Apple 芯片上经 Rosetta 转译运行的终端也安装 arm64 版本
 case "$(uname -m)" in
   arm64) arch=arm64 ;;
   x86_64)
-    if [[ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" == 1 ]]; then arch=arm64; else arch=amd64; fi ;;
+    if [[ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" == 1 ]]; then
+      arch=arm64
+    else
+      arch=amd64
+    fi ;;
   *) die "不支持的架构：$(uname -m)" ;;
 esac
 asset="sysbox-darwin-${arch}"
@@ -52,5 +56,5 @@ ok "已安装 $("${INSTALL_DIR}/sysbox" version) 到 ${INSTALL_DIR}/sysbox"
 
 case ":$PATH:" in
   *":${INSTALL_DIR}:"*) ;;
-  *) printf '\n把下面这行加入 ~/.zshrc 后重新打开终端：\n  export PATH="%s:$PATH"\n' "${INSTALL_DIR}" ;;
+  *) printf '\n把下面这行加入 shell 配置后重新打开终端：\n  export PATH="%s:$PATH"\n' "${INSTALL_DIR}" ;;
 esac

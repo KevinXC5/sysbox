@@ -1,4 +1,6 @@
-// Package config 读写 sysbox 的用户配置，位于 ~/.config/sysbox/config.json。
+// Package config 读写 sysbox 的用户配置。
+// macOS 位于 $XDG_CONFIG_HOME/sysbox/config.json，未设置时为 ~/.config/sysbox/config.json；
+// Windows 位于 %APPDATA%\sysbox\config.json，APPDATA 为空时回退到 os.UserConfigDir()。
 // 所有字段都可省略，省略时使用各工具的默认值。
 package config
 
@@ -8,15 +10,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Config 用户配置
 type Config struct {
-	Theme    string   `json:"theme,omitempty"` // auto / light / dark
-	Agent    Agent    `json:"agent"`
-	Claude   Claude   `json:"claude"`
-	Obsidian Obsidian `json:"obsidian"`
-	Update   Update   `json:"update"`
+	Theme  string `json:"theme,omitempty"` // auto / light / dark
+	Agent  Agent  `json:"agent"`
+	Claude Claude `json:"claude"`
+	Update Update `json:"update"`
 }
 
 // Agent agent 垃圾清理
@@ -30,29 +32,52 @@ type Claude struct {
 	Direct bool   `json:"direct,omitempty"`
 }
 
-// Obsidian 目录链接
-type Obsidian struct {
-	Src      string   `json:"src,omitempty"`
-	Dest     string   `json:"dest,omitempty"`
-	Excludes []string `json:"excludes,omitempty"`
-}
-
 // Update sysbox 自身的升级检查
 type Update struct {
 	DisableCheck bool `json:"disable_check,omitempty"` // 关闭启动时的新版本检查
 }
 
-// Dir 配置目录，遵循 XDG_CONFIG_HOME，默认 ~/.config/sysbox
+// Dir 配置目录。macOS 遵循 XDG_CONFIG_HOME，默认 ~/.config/sysbox；
+// Windows 使用 %APPDATA%\sysbox，APPDATA 为空时回退到 os.UserConfigDir()。
 func Dir() (string, error) {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".config")
+	base, err := configBase(os.Getenv)
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join(dir, "sysbox"), nil
+	return filepath.Join(base, "sysbox"), nil
+}
+
+// configBase 配置根目录（不含 sysbox）。lookup 注入环境变量，便于测试。
+func configBase(lookup func(string) string) (string, error) {
+	if runtime.GOOS == "windows" {
+		return windowsConfigBase(lookup)
+	}
+	return unixConfigBase(lookup)
+}
+
+// unixConfigBase macOS：XDG_CONFIG_HOME，否则 ~/.config
+func unixConfigBase(lookup func(string) string) (string, error) {
+	if dir := lookup("XDG_CONFIG_HOME"); dir != "" {
+		return dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config"), nil
+}
+
+// windowsConfigBase Windows：%APPDATA%，为空时回退到家目录下的 AppData\Roaming。
+// os.UserConfigDir 同样只读 APPDATA，不能作为回退。
+func windowsConfigBase(lookup func(string) string) (string, error) {
+	if dir := lookup("APPDATA"); dir != "" {
+		return dir, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "AppData", "Roaming"), nil
 }
 
 // Path 配置文件路径

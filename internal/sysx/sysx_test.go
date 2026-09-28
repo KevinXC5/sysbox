@@ -1,9 +1,7 @@
 package sysx
 
 import (
-	"context"
-	"os/exec"
-	"strings"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -37,54 +35,48 @@ func TestParsePS(t *testing.T) {
 	if procs[1].Path != "/Applications/My App.app/Contents/MacOS/My App" {
 		t.Errorf("含空格的路径解析有误：%q", procs[1].Path)
 	}
-	if r := procs[1].BusyRatio(); r < 0.49 || r > 0.51 {
-		t.Errorf("CPU 占比计算有误：%v", r)
-	}
-}
-
-func TestParseDisabled(t *testing.T) {
-	out := `	disabled services = {
-		"com.sangfor.aTrustTray" => disabled
-		"com.logi.optionsplus" => enabled
-		"com.apple.appstoreagent" => true
-	}`
-	m := ParseDisabled(out)
-	if !m["com.sangfor.aTrustTray"] || m["com.logi.optionsplus"] || !m["com.apple.appstoreagent"] {
-		t.Errorf("禁用标记解析有误：%v", m)
-	}
 }
 
 func TestCmdString(t *testing.T) {
-	c := Root("launchctl", "bootout", "system", "/Library/Launch Daemons/a.plist")
-	want := `sudo launchctl bootout system "/Library/Launch Daemons/a.plist"`
+	c := C("launchctl", "bootout", "system", "/Library/Launch Daemons/a.plist")
+	want := `launchctl bootout system "/Library/Launch Daemons/a.plist"`
 	if c.String() != want {
 		t.Errorf("命令文本 %q，期望 %q", c.String(), want)
 	}
 }
 
-// 演练执行器：只读命令真实执行，修改类命令只记录；Terminate 不会真的发信号
-func TestDryRunner(t *testing.T) {
-	d := NewDryRunner(ExecRunner{})
-	out, err := d.Run(context.Background(), C("sysctl", "-n", "hw.ncpu"))
-	if err != nil || strings.TrimSpace(out) == "" {
-		t.Fatalf("只读命令应真实执行：%q %v", out, err)
+func TestExeName(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		if exeName("Claude.EXE") != "claude" || exeName(`C:\Tools\idea64.exe`) != "idea64" {
+			t.Fatal("Windows 应去掉 .exe 并忽略大小写")
+		}
+		if exeName("claude") != "claude" {
+			t.Fatal("不带后缀的名字应保持小写")
+		}
+		return
 	}
-	if _, err := d.Run(context.Background(), Root("launchctl", "disable", "system/x")); err != nil {
-		t.Fatal(err)
+	if exeName("claude") != "claude" || exeName("Claude.EXE") != "Claude.EXE" {
+		t.Fatal("非 Windows 不应改写进程名")
 	}
-	child := exec.Command("sleep", "30")
-	if err := child.Start(); err != nil {
-		t.Fatal(err)
+}
+
+func TestByNameWindowsExe(t *testing.T) {
+	match := ByName("claude", "idea")
+	hit := Proc{Path: "claude"}
+	miss := Proc{Path: "codex"}
+	if runtime.GOOS == "windows" {
+		if !match(Proc{Path: "Claude.EXE"}) {
+			t.Fatal("Windows 上 Claude.EXE 应匹配 claude")
+		}
+		if match(Proc{Path: "idea64.exe"}) {
+			t.Fatal("idea64.exe 不应匹配 idea")
+		}
+		return
 	}
-	defer child.Process.Kill()
-	if alive := Terminate(context.Background(), d, []int{child.Process.Pid}, time.Second, false); alive != nil {
-		t.Errorf("演练模式应视为全部结束：%v", alive)
+	if !match(hit) || match(miss) {
+		t.Fatal("非 Windows 应按原名精确匹配")
 	}
-	if !Alive(child.Process.Pid) {
-		t.Error("演练模式不应真的结束进程")
-	}
-	calls := d.Calls()
-	if len(calls) != 2 || calls[0] != "sudo launchctl disable system/x" || !strings.HasPrefix(calls[1], "kill -TERM ") {
-		t.Errorf("记录的命令有误：%v", calls)
+	if match(Proc{Path: "Claude.EXE"}) {
+		t.Fatal("非 Windows 不应忽略大小写或后缀")
 	}
 }

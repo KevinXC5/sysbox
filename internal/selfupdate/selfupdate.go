@@ -104,8 +104,17 @@ func (c *Client) Latest(ctx context.Context) (Release, error) {
 	return r, json.NewDecoder(resp.Body).Decode(&r)
 }
 
-// AssetName 当前架构对应的二进制文件名
-func AssetName() string { return fmt.Sprintf("sysbox-darwin-%s", runtime.GOARCH) }
+// AssetName 当前系统与架构对应的发布产物名，Windows 带 .exe 后缀
+func AssetName() string { return AssetNameFor(runtime.GOOS, runtime.GOARCH) }
+
+// AssetNameFor 按系统和架构拼出发布产物名。Windows 为 sysbox-windows-<arch>.exe，其余为 sysbox-<os>-<arch>
+func AssetNameFor(goos, goarch string) string {
+	name := fmt.Sprintf("sysbox-%s-%s", goos, goarch)
+	if goos == "windows" {
+		name += ".exe"
+	}
+	return name
+}
 
 // Newer 判断 latest 是否比 current 新；current 为 dev 时总是返回 false
 func Newer(latest, current string) bool {
@@ -183,7 +192,7 @@ func (c *Client) Install(ctx context.Context, rel Release, exe string, progress 
 	if err := os.Chmod(tmp.Name(), 0o755); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), exe)
+	return replaceExecutable(tmp.Name(), exe)
 }
 
 func find(rel Release, name string) *Asset {

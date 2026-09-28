@@ -1,4 +1,4 @@
-// sysbox 个人 macOS 维护工具箱
+// sysbox 跨平台系统维护工具箱
 package main
 
 import (
@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,7 +19,7 @@ import (
 	"github.com/KevinXC5/sysbox/internal/ui/theme"
 )
 
-const usage = `sysbox —— 个人 macOS 维护工具箱
+const usage = `sysbox —— 系统维护工具箱
 
 用法：
   sysbox [选项]            打开界面
@@ -37,6 +36,7 @@ const usage = `sysbox —— 个人 macOS 维护工具箱
 `
 
 func main() {
+	selfupdate.CleanupOld()
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	dryRun := flag.Bool("dry-run", false, "")
 	themeFlag := flag.String("theme", "", "")
@@ -90,7 +90,8 @@ func runTUI(start string, dryRun bool, themeFlag string) int {
 	}
 	if app.Restart() {
 		if exe, err := selfupdate.Executable(); err == nil {
-			_ = syscall.Exec(exe, os.Args, os.Environ())
+			// Unix 上 Exec 成功不会返回；Windows 上新进程已启动，当前进程直接退出
+			_ = selfupdate.Restart(exe, os.Args, os.Environ())
 		}
 	}
 	return 0

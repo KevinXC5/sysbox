@@ -8,7 +8,7 @@ import (
 )
 
 // platformSuffix 版本名末尾的平台三元组，不参与版本比较
-var platformSuffix = regexp.MustCompile(`-(?:aarch64|x86_64|arm64|x64)-(?:apple-darwin|unknown-linux-(?:gnu|musl)|pc-windows-msvc)$`)
+var platformSuffix = regexp.MustCompile(`-(?:aarch64|x86_64|arm64|x64)-(?:apple-darwin|pc-windows-msvc)$`)
 
 // version 可比较的版本号：正式版高于同号预发布版，预发布标识按语义化版本规则逐段比较
 type version struct {

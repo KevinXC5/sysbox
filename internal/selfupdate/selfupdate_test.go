@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -28,6 +29,26 @@ func TestNewer(t *testing.T) {
 		if got := Newer(c.latest, c.current); got != c.want {
 			t.Errorf("Newer(%q, %q) = %v", c.latest, c.current, got)
 		}
+	}
+}
+
+func TestAssetNameFor(t *testing.T) {
+	cases := []struct {
+		goos, goarch, want string
+	}{
+		{"darwin", "arm64", "sysbox-darwin-arm64"},
+		{"darwin", "amd64", "sysbox-darwin-amd64"},
+		{"windows", "amd64", "sysbox-windows-amd64.exe"},
+		{"windows", "arm64", "sysbox-windows-arm64.exe"},
+	}
+	for _, c := range cases {
+		if got := AssetNameFor(c.goos, c.goarch); got != c.want {
+			t.Errorf("AssetNameFor(%q, %q) = %q，期望 %q", c.goos, c.goarch, got, c.want)
+		}
+	}
+	want := AssetNameFor(runtime.GOOS, runtime.GOARCH)
+	if got := AssetName(); got != want {
+		t.Errorf("AssetName() = %q，期望 %q", got, want)
 	}
 }
 
@@ -80,7 +101,8 @@ func TestInstall(t *testing.T) {
 	if string(got) != string(binary) || last != int64(len(binary)) {
 		t.Errorf("替换结果有误：%q，进度 %d", got, last)
 	}
-	if fi, _ := os.Stat(exe); fi.Mode().Perm() != 0o755 {
+	// Windows 没有可执行权限位，只在 Unix 上检查
+	if fi, _ := os.Stat(exe); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 {
 		t.Errorf("权限应为 755，实际 %v", fi.Mode().Perm())
 	}
 }

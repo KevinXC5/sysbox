@@ -53,7 +53,7 @@ func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
 	sc := &scanner{home: s.Home, keep: time.Duration(s.KeepDays) * 24 * time.Hour, now: s.Now()}
 	sc.scanDirs(cacheDirs, CatCache, progress)
 	sc.scanDirs(logDirs, CatLog, progress)
-	for _, r := range versionRules {
+	for _, r := range versionRules() {
 		sc.scanVersions(r, progress)
 	}
 	sc.inspectBinaries(progress)
@@ -98,7 +98,8 @@ func (s *Source) Remove(it cleanup.Item) error {
 }
 
 func (r ref) stillSafe(item string, now time.Time) error {
-	if !plainDir(r.root) || filepath.Dir(item) != r.root {
+	// 目录名在 Windows 上大小写不敏感，短路径展开后也不能按字符串判成“已改变”
+	if !plainDir(r.root) || !samePath(filepath.Dir(item), r.root) {
 		return errors.New("所在目录已改变")
 	}
 	if isSymlink(item) {
@@ -112,15 +113,20 @@ func (r ref) stillSafe(item string, now time.Time) error {
 		return errors.New("文件已被替换")
 	}
 	if r.activeLink != "" {
-		active, err := filepath.EvalSymlinks(r.activeLink)
-		if err != nil || !isSymlink(r.activeLink) {
+		// 扫描时靠链接确认的当前版本，删除前必须仍是链接；复制品无法再确认，拒绝删除
+		if !isSymlink(r.activeLink) {
 			return errors.New("当前版本链接异常")
 		}
-		if filepath.Dir(active) != r.root || active == item {
+		active, err := filepath.EvalSymlinks(r.activeLink)
+		if err != nil {
+			return errors.New("当前版本链接异常")
+		}
+		if !samePath(filepath.Dir(active), r.root) || samePath(active, item) {
 			return errors.New("当前版本已切换到该条目")
 		}
 		for _, o := range r.otherLinks {
-			if t, err := filepath.EvalSymlinks(o); err != nil || t != active {
+			t, err := filepath.EvalSymlinks(o)
+			if err != nil || !samePath(t, active) {
 				return errors.New("命令链接不一致")
 			}
 		}

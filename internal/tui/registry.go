@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"runtime"
+
 	"github.com/KevinXC5/sysbox/internal/tools/agentjunk"
 	"github.com/KevinXC5/sysbox/internal/tools/jetbrains"
 	"github.com/KevinXC5/sysbox/internal/tui/screens"
@@ -11,12 +13,7 @@ func Tools() []screens.Tool {
 	return []screens.Tool{
 		{
 			ID: "jetbrains", Group: "清理", Name: "JetBrains 缓存", Desc: "索引、编译缓存与 IDE 日志",
-			Detail: []string{
-				"清理可本地重建的缓存，包括索引、编译缓存、内嵌浏览器缓存等",
-				"清理 Logs/JetBrains 下的全部日志",
-				"跳过需要重新下载的 Agent 与补全模型",
-				"不改动 Application Support（设置、插件本体）",
-			},
+			Detail: jetbrainsDetail(runtime.GOOS),
 			New: func(env screens.Env) screens.Page {
 				src, err := jetbrains.NewSource()
 				if err != nil {
@@ -42,34 +39,6 @@ func Tools() []screens.Tool {
 			},
 		},
 		{
-			ID: "appstore", Group: "进程治理", Name: "appstoreagent", Desc: "ArcadeManager 死循环占满 CPU",
-			Detail: []string{
-				"实时查看 appstoreagent 的 CPU 占用，自动识别疑似死循环",
-				"禁用自动拉起并结束当前进程，重启后仍生效",
-				"Apple 修复后一键恢复默认行为",
-			},
-			New: screens.NewAppStore,
-		},
-		{
-			ID: "cursorui", Group: "进程治理", Name: "CursorUIViewService", Desc: "排查进程关联的 App 与文件",
-			Detail: []string{
-				"列出 CursorUIViewService 进程及资源占用",
-				"分析打开的文件，定位关联的 App、输入法、废纸篓资源与网络连接",
-				"先正常退出、超时再强制结束，并检查系统是否重新拉起",
-			},
-			New: screens.NewCursorUI,
-		},
-		{
-			ID: "sangfor", Group: "进程治理", Name: "深信服客户端", Desc: "退出 aTrust 与 VDI，压住 ecosystemd",
-			Detail: []string{
-				"查看全部 launchd 服务的加载与自启状态，以及 ecosystemd 占用",
-				"彻底停止并禁用客户端，重启 ecosystemd 清除高 CPU 状态",
-				"按依赖顺序恢复启动与开机自启",
-				"按 plist 登记的程序路径精确识别进程，不做模糊匹配",
-			},
-			New: screens.NewSangfor,
-		},
-		{
 			ID: "claude", Group: "工具", Name: "Claude Code 更新", Desc: "断点续传，校验后安装",
 			Detail: []string{
 				"安装 latest、stable 或指定版本的 Claude Code",
@@ -78,15 +47,6 @@ func Tools() []screens.Tool {
 				"代理不可用时自动改为直连",
 			},
 			New: screens.NewClaude,
-		},
-		{
-			ID: "obsidian", Group: "工具", Name: "Obsidian 目录链接", Desc: "按子目录选择性链接进 vault",
-			Detail: []string{
-				"把工作目录按一级子目录选择性链接进 Obsidian 库",
-				"避免归档、素材、node_modules 被 Obsidian 索引",
-				"实时预览新增与移除的链接，源目录保持不动",
-			},
-			New: screens.NewObsidian,
 		},
 	}
 }
@@ -99,4 +59,19 @@ func Find(id string) (screens.Tool, bool) {
 		}
 	}
 	return screens.Tool{}, false
+}
+
+// jetbrainsDetail JetBrains 的日志与配置目录位置在 macOS 与 Windows 上不同
+func jetbrainsDetail(goos string) []string {
+	logs, keep := "清理 Logs/JetBrains 下的全部日志", "不改动 Application Support（设置、插件本体）"
+	switch goos {
+	case "windows":
+		logs, keep = "清理各产品缓存目录下 log 子目录中的日志", `不改动 %APPDATA%\JetBrains（设置、插件本体）`
+	}
+	return []string{
+		"清理可本地重建的缓存，包括索引、编译缓存、内嵌浏览器缓存等",
+		logs,
+		"跳过需要重新下载的 Agent 与补全模型",
+		keep,
+	}
 }

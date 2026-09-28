@@ -27,12 +27,17 @@ func (o Options) Remove(path string) error {
 	return os.RemoveAll(p)
 }
 
-// allowed 判断路径是否严格位于缓存或日志根目录之下
+// allowed 判断路径是否严格位于缓存或日志根目录之下。
+// 配置目录、用户数据目录和家目录本身一律拒绝。
+// 日志在缓存内部时 LogRoot 就是某个产品的 log 子目录，仍落在缓存根之下，允许删除。
 func (o Options) allowed(p string) bool {
-	for _, forbidden := range []string{"/", o.Home, filepath.Join(o.Home, "Library")} {
+	for _, forbidden := range forbiddenRoots(o) {
 		if p == forbidden {
 			return false
 		}
+	}
+	if within(p, o.AppSupport) || p == o.AppSupport {
+		return false
 	}
 	return within(p, o.CacheRoot) || within(p, o.LogRoot)
 }
