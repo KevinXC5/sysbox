@@ -22,7 +22,7 @@ internal/
   selfupdate/        从 GitHub Release 检查与安装新版本
   uninstall/         卸载：删除程序、撤销安装时写入的 PATH、可选删除配置
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
-    jetbrains/  vscode/  agentjunk/  claudeupdate/
+    jetbrains/  vscode/  agentjunk/  devcache/  projects/  claudeupdate/
   ui/
     theme/           配色（浅色、深色两套）、渐变、Logo
     widget/          顶栏、底栏、面板、弹窗、进度条等组件
@@ -39,7 +39,8 @@ install.ps1          Windows 安装脚本
 
 - `tools/` 只包含领域逻辑，通过 `sysx.Runner` 执行命令，测试时可替换为假的实现
 - 演练模式由各工具根据 `screens.Env.DryRun` 自行处理，只走流程不做修改
-- 清理类工具实现 `cleanup.Source` 接口，复用 `screens.NewClean`
+- 清理类工具实现 `cleanup.Source` 接口，在注册表中用 `cleanTool` 登记，复用 `screens.NewClean`，并自动加入首页的可释放空间汇总
+- 删除前检查只需关心所选条目时，额外实现 `cleanup.ItemChecker`
 - 新增工具：实现领域逻辑与页面，在 `internal/tui/registry.go` 登记一项即可
 
 ### 发布

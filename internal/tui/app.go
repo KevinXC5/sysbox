@@ -39,6 +39,7 @@ type App struct {
 	env        screens.Env
 	home       *screens.Home
 	page       screens.Page // 非空时显示该页面，否则显示首页
+	pageID     string       // 当前页面对应的工具
 	start      string       // 启动后直接打开的工具
 	newVersion string
 	restart    bool
@@ -46,7 +47,7 @@ type App struct {
 
 // New 创建应用；start 非空时启动后直接打开该工具
 func New(env screens.Env, start string) *App {
-	return &App{env: env, home: screens.NewHome(Tools()), start: start}
+	return &App{env: env, home: screens.NewHome(Tools(), env), start: start}
 }
 
 // Restart 退出后是否需要用新版本重启
@@ -106,8 +107,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.OpenMsg:
 		return a, a.open(msg.ID)
 	case screens.BackMsg:
+		// 清理后回到首页，已扫描过的汇总随之更新
 		a.page = nil
-		return a, nil
+		return a, a.home.Refresh(a.pageID)
 	case screens.RestartMsg:
 		a.restart = true
 		return a, tea.Quit
@@ -123,14 +125,14 @@ func typing(p screens.Page) bool {
 // open 打开工具或自升级页
 func (a *App) open(id string) tea.Cmd {
 	if id == screens.SelfUpdateID {
-		a.page = screens.NewSelfUpdate(a.env)
+		a.page, a.pageID = screens.NewSelfUpdate(a.env), id
 		return a.page.Init()
 	}
 	t, ok := Find(id)
 	if !ok {
 		return nil
 	}
-	a.page = t.New(a.env)
+	a.page, a.pageID = t.New(a.env), id
 	return a.page.Init()
 }
 

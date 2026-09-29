@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/KevinXC5/sysbox/internal/cleanup"
 	"github.com/KevinXC5/sysbox/internal/config"
 	"github.com/KevinXC5/sysbox/internal/ui/theme"
 )
@@ -40,6 +41,8 @@ type Tool struct {
 	Desc   string   // 列表里的一句话简介
 	Detail []string // 详情面板里的功能要点
 	New    func(Env) Page
+	// Source 清理类工具的数据源，首页用它汇总可释放空间；非清理工具为 nil
+	Source func(Env) (cleanup.Source, error)
 }
 
 // BackMsg 返回首页

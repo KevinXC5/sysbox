@@ -27,13 +27,16 @@ type sysInfoMsg sysInfo
 // Home 首页：左侧分组的工具列表，右侧当前工具的详情
 type Home struct {
 	tools      []Tool
+	env        Env
 	cursor     int
 	info       sysInfo
 	newVersion string
+	sums       map[string]*toolSum // 按 s 扫描后各清理工具的可释放空间
+	gen        int
 }
 
 // NewHome 创建首页
-func NewHome(tools []Tool) *Home { return &Home{tools: tools} }
+func NewHome(tools []Tool, env Env) *Home { return &Home{tools: tools, env: env} }
 
 // SetNewVersion 有可用新版本时由根模型设置
 func (m *Home) SetNewVersion(v string) { m.newVersion = v }
@@ -49,6 +52,13 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case sysInfoMsg:
 		m.info = sysInfo(msg)
+	case homeSumMsg:
+		if sum := m.sums[msg.id]; sum != nil && sum.gen == msg.gen {
+			*sum = toolSum{gen: msg.gen, done: true, n: msg.n, size: msg.size}
+			if msg.err != nil {
+				sum.failure = msg.err.Error()
+			}
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
@@ -57,6 +67,8 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 			m.cursor = (m.cursor + 1) % len(m.tools)
 		case "q", "esc":
 			return tea.Quit
+		case "s", "S":
+			return m.scanAll()
 		case "u", "U":
 			if m.newVersion != "" {
 				return Open(SelfUpdateID)
@@ -68,10 +80,52 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+// scanAll 并行扫描全部清理工具
+func (m *Home) scanAll() tea.Cmd {
+	m.gen++
+	m.sums = map[string]*toolSum{}
+	var cmds []tea.Cmd
+	for _, t := range m.tools {
+		if t.Source != nil {
+			m.sums[t.ID] = &toolSum{gen: m.gen}
+			cmds = append(cmds, scanTool(t, m.env, m.gen))
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+// Refresh 从工具页返回后重扫该工具；还没扫描过时什么也不做
+func (m *Home) Refresh(id string) tea.Cmd {
+	if m.sums[id] == nil {
+		return nil
+	}
+	for _, t := range m.tools {
+		if t.ID == id && t.Source != nil {
+			m.sums[id] = &toolSum{gen: m.gen}
+			return scanTool(t, m.env, m.gen)
+		}
+	}
+	return nil
+}
+
+// total 已完成扫描的工具数和可释放总量
+func (m *Home) total() (done int, size int64) {
+	for _, s := range m.sums {
+		if s.done {
+			done++
+			size += s.size
+		}
+	}
+	return done, size
+}
+
 func (m *Home) Crumbs() []string { return nil }
 
 func (m *Home) Hints() []string {
-	hints := []string{"↑↓", "选择", "enter", "打开"}
+	hints := []string{"↑↓", "选择", "enter", "打开", "s", "扫描"}
+	if m.sums != nil {
+		hints[5] = "重新扫描"
+	}
 	if m.newVersion != "" {
 		hints = append(hints, "U", "升级")
 	}
@@ -79,7 +133,15 @@ func (m *Home) Hints() []string {
 }
 
 func (m *Home) Status() string {
-	return theme.MutedStyle.Render(strconv.Itoa(len(m.tools)) + " 个工具")
+	tools := theme.MutedStyle.Render(strconv.Itoa(len(m.tools)) + " 个工具")
+	if m.sums == nil {
+		return tools
+	}
+	done, size := m.total()
+	if done < len(m.sums) {
+		return theme.SubtleStyle.Render("正在扫描 "+strconv.Itoa(done)+"/"+strconv.Itoa(len(m.sums))) + theme.MutedStyle.Render(" · ") + tools
+	}
+	return theme.Fg(theme.Accent).Render("共可释放 "+fsx.FormatBytes(size)) + theme.MutedStyle.Render(" · ") + tools
 }
 
 func (m *Home) Body(w, h int) string {
@@ -149,7 +211,25 @@ func (m *Home) row(t Tool, sel bool, w int) string {
 		descStyle = theme.SubtleStyle
 	}
 	nameW := min(22, max(12, (w-2)*2/5))
-	return bar + widget.Cell(t.Name, nameW, nameStyle, false) + widget.Cell(t.Desc, w-2-nameW, descStyle, false)
+	desc := t.Desc
+	// 扫描过后简介列改为显示可释放空间
+	if sum := m.sums[t.ID]; sum != nil {
+		desc, descStyle = sumText(sum)
+	}
+	return bar + widget.Cell(t.Name, nameW, nameStyle, false) + widget.Cell(desc, w-2-nameW, descStyle, false)
+}
+
+// sumText 扫描汇总的简短文字与样式
+func sumText(sum *toolSum) (string, lipgloss.Style) {
+	switch {
+	case !sum.done:
+		return "扫描中…", theme.MutedStyle
+	case sum.failure != "":
+		return "不可用", theme.MutedStyle
+	case sum.n == 0:
+		return "无需清理", theme.MutedStyle
+	}
+	return "可释放 " + fsx.FormatBytes(sum.size), theme.Fg(theme.Green)
 }
 
 // detail 右侧详情面板，介绍当前选中的工具
@@ -160,8 +240,18 @@ func (m *Home) detail(w, h int) string {
 		theme.BoldStyle.Render(t.Name),
 		theme.MutedStyle.Render(t.Group + " · " + t.Desc),
 		"",
-		widget.Section("功能"),
 	}
+	if sum := m.sums[t.ID]; sum != nil {
+		text, style := sumText(sum)
+		switch {
+		case sum.failure != "":
+			text = sum.failure
+		case sum.done && sum.n > 0:
+			text += " · 默认勾选 " + strconv.Itoa(sum.n) + " 项"
+		}
+		lines = append(lines, widget.Section("扫描结果"), style.Width(inner).Render(text), "")
+	}
+	lines = append(lines, widget.Section("功能"))
 	for _, d := range t.Detail {
 		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top,
 			theme.Fg(theme.Accent).Render("· "), theme.TextStyle.Width(inner-2).Render(d)))

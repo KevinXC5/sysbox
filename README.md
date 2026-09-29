@@ -11,11 +11,13 @@
 | 分组 | 工具 | 作用 |
 |---|---|---|
 | 清理 | JetBrains 缓存 | 清理索引、编译缓存与 IDE 日志；默认跳过需要重新下载的 Agent 与补全模型（可手动勾选），不碰设置与插件目录 |
-| 清理 | VS Code 清理 | 清理 VS Code 与 Insiders 的旧扩展、旧服务端、可重建缓存、日志和崩溃报告；设置、当前引用版本和未知目录默认不勾选，可手动纳入 |
+| 清理 | VS Code 系编辑器 | 清理 VS Code、Insiders、Cursor、Windsurf、Trae 的旧扩展、旧服务端、可重建缓存、日志和崩溃报告；设置、当前引用版本和未知目录默认不勾选，可手动纳入 |
 | 清理 | Agent 垃圾 | 默认清理 Claude、Codex、OpenCode 等超过保留期的缓存；近期缓存、日志、旧版本和疑似备份可手动勾选 |
+| 清理 | 开发缓存 | 清理 Go、npm、pnpm、Yarn、Bun、pip、uv、Gradle、Maven、Cargo、Homebrew 的缓存；构建依赖默认不勾选 |
+| 清理 | 项目构建产物 | 查找长期未活动项目的 node_modules、target、build、.venv 等构建产物 |
 | 工具 | Claude Code 更新 | 断点续传下载指定版本，SHA-256 校验后调用官方安装 |
 
-所有会修改系统的操作都有确认弹窗；加上 `--dry-run` 可以完整走一遍流程而不做任何修改。
+所有会修改系统的操作都有确认弹窗；加上 `--dry-run` 可以完整走一遍流程而不做任何修改。首页按 `s` 可以一次扫描全部清理工具，列出各自可释放的空间与合计。
 
 ## 安装
 
@@ -57,7 +59,9 @@ sysbox uninstall --purge  # 同时删除配置目录
 ```bash
 sysbox                 # 打开界面
 sysbox jetbrains       # 直接打开某个工具，工具名见 sysbox list
-sysbox vscode          # 清理 VS Code 的旧版本、缓存与日志
+sysbox vscode          # 清理 VS Code、Cursor 等编辑器的旧版本、缓存与日志
+sysbox devcache        # 清理包管理器与构建工具的缓存
+sysbox projects        # 清理长期未活动项目的构建产物
 sysbox --dry-run vscode # 演练 VS Code 清理，不删除文件
 sysbox --dry-run       # 演练模式
 sysbox --theme light   # 指定主题：auto、light、dark
@@ -66,20 +70,38 @@ sysbox update          # 升级到最新版本
 sysbox version         # 显示版本号
 ```
 
-通用按键：`↑↓` 移动，`enter` 确认，`esc` 返回，`t` 切换主题，`ctrl+c` 退出。各页面的其余按键显示在底栏。
+通用按键：`↑↓` 移动，`enter` 确认，`esc` 返回，`t` 切换主题，`ctrl+c` 退出。首页按 `s` 扫描可释放空间，从工具返回首页时会重新统计该工具。各页面的其余按键显示在底栏。
 
 主题默认跟随终端背景色自动选择深色或浅色，按 `t` 在 自动 → 浅色 → 深色 之间切换，选择会被记住。
 
-### VS Code 清理
+### VS Code 系编辑器
 
-从首页选择「VS Code 清理」，或运行 `sysbox vscode`。支持 macOS 与 Windows 上默认目录中的 VS Code、VS Code Insiders，以及当前用户目录中的 VS Code Server。
+从首页选择「VS Code 系编辑器」，或运行 `sysbox vscode`。支持 macOS 与 Windows 上默认目录中的 VS Code、VS Code Insiders、Cursor、Windsurf、Trae、Trae CN，以及当前用户目录中对应的远程服务端。
 
 - 默认可清理的是可重建缓存、扩展安装包缓存、日志、崩溃报告，以及已确认落后且未被引用的旧扩展。
 - 设置、快捷键、工作区状态、未保存文件备份、当前引用版本、同平台最新版本和未知目录默认不勾选。手动勾选后按不可恢复处理，删除前会再核对一次。
 - 旧服务端仅在版本信息足够时列出，默认不勾选。手动清理前请停止相关服务端，再次连接相应版本时需要重新下载。读不到版本的安装不能勾选。
 - 扩展索引缺失或损坏时整组不可选。符号链接不跟随目标。应用数据、扩展目录和服务端根目录本身不会删除。不扫描自定义数据目录或便携安装目录。
 
-清理前需要退出 VS Code。先运行 `sysbox --dry-run vscode` 可查看扫描结果并演练清理流程。
+清理前需要退出所选条目涉及的编辑器，未勾选的编辑器可以继续运行。先运行 `sysbox --dry-run vscode` 可查看扫描结果并演练清理流程。
+
+### 开发缓存
+
+从首页选择「开发缓存」，或运行 `sysbox devcache`。
+
+- 默认勾选只影响下次安装速度的缓存：Go 构建缓存，npm、Yarn、Bun、pip、uv、Homebrew 的下载缓存，Gradle 构建缓存，Cargo 解压的源码。
+- 构建依赖默认不勾选，删除后需要联网重新下载：Go 模块缓存、pnpm store、Gradle 依赖缓存、Maven 本地仓库、Cargo 压缩包缓存。Maven 仓库里 `mvn install` 安装的构件删除后无法重新下载。
+- Gradle 的 `caches/<版本>`、`daemon/<版本>` 与 `wrapper/dists` 只保留最高版本。
+- 缓存位置优先询问工具本身（如 `go env`），其次读取 `GOMODCACHE`、`GRADLE_USER_HOME`、`CARGO_HOME` 等环境变量，最后使用默认位置。Go 与 uv 调用官方清理命令，其余直接删除目录；符号链接不能勾选。
+- pnpm store 被项目的 node_modules 以硬链接引用，项目仍在时实际释放会少于显示大小。
+
+### 项目构建产物
+
+从首页选择「项目构建产物」，或运行 `sysbox projects`。
+
+- 在项目目录下查找 node_modules、.next、target、build、.gradle、.dart_tool、.build、obj、bin、.venv 等构建产物。产物旁必须有对应的项目文件（如 package.json、Cargo.toml、pom.xml、build.gradle、*.csproj）才会列出。
+- 项目的活跃时间取 `.git` 状态文件与浅层源码的最新修改时间。超过保留期未活动的项目默认勾选，近期项目可手动勾选。Python 虚拟环境默认不勾选。
+- 未配置 `projects.roots` 时，自动扫描家目录下的 Github、Projects、Developer、Code、src、workspace、repos、IdeaProjects 等常见目录。不跟随符号链接，不进入 Library、AppData 与隐藏目录。
 
 ### Agent 垃圾
 
@@ -98,6 +120,7 @@ sysbox version         # 显示版本号
 {
   "theme": "auto",
   "agent": { "keep_days": 30 },
+  "projects": { "roots": ["~/Github"], "keep_days": 30 },
   "claude": { "proxy": "http://127.0.0.1:7890", "direct": false },
   "update": { "disable_check": false }
 }
@@ -106,6 +129,8 @@ sysbox version         # 显示版本号
 | 字段 | 说明 |
 |---|---|
 | `agent.keep_days` | 缓存与日志的保留天数，默认 30 |
+| `projects.roots` | 扫描构建产物的项目目录，支持 `~` 开头；省略时自动查找常见目录 |
+| `projects.keep_days` | 项目多少天未活动算过期，默认 30 |
 | `claude.proxy` | 下载 Claude Code 使用的代理；代理不可用时自动直连。也可用环境变量 `PROXY_URL` 覆盖 |
 | `claude.direct` | 始终直连，等同于环境变量 `CLAUDE_NO_PROXY=1` |
 
