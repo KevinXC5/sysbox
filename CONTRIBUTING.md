@@ -21,7 +21,7 @@ internal/
   cleanup/           “扫描 → 勾选 → 删除”类工具的通用模型
   selfupdate/        从 GitHub Release 检查与安装新版本
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
-    jetbrains/  agentjunk/  claudeupdate/
+    jetbrains/  vscode/  agentjunk/  claudeupdate/
   ui/
     theme/           配色（浅色、深色两套）、渐变、Logo
     widget/          顶栏、底栏、面板、弹窗、进度条等组件

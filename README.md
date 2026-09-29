@@ -11,6 +11,7 @@
 | 分组 | 工具 | 作用 |
 |---|---|---|
 | 清理 | JetBrains 缓存 | 清理索引、编译缓存与 IDE 日志；默认跳过需要重新下载的 Agent 与补全模型（可手动勾选），不碰设置与插件目录 |
+| 清理 | VS Code 清理 | 清理 VS Code 与 Insiders 的旧扩展、旧服务端二进制、可重建缓存、日志和崩溃报告；保留当前引用的版本、设置及用户数据 |
 | 清理 | Agent 垃圾 | 清理 Claude、Codex、OpenCode 等超过保留期的缓存和日志，以及可以确认的旧版本 |
 | 工具 | Claude Code 更新 | 断点续传下载指定版本，SHA-256 校验后调用官方安装 |
 
@@ -47,6 +48,8 @@ irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
 ```bash
 sysbox                 # 打开界面
 sysbox jetbrains       # 直接打开某个工具，工具名见 sysbox list
+sysbox vscode          # 清理 VS Code 的旧版本、缓存与日志
+sysbox --dry-run vscode # 演练 VS Code 清理，不删除文件
 sysbox --dry-run       # 演练模式
 sysbox --theme light   # 指定主题：auto、light、dark
 sysbox list            # 列出全部工具
@@ -57,6 +60,17 @@ sysbox version         # 显示版本号
 通用按键：`↑↓` 移动，`enter` 确认，`esc` 返回，`t` 切换主题，`ctrl+c` 退出。各页面的其余按键显示在底栏。
 
 主题默认跟随终端背景色自动选择深色或浅色，按 `t` 在 自动 → 浅色 → 深色 之间切换，选择会被记住。
+
+### VS Code 清理
+
+从首页选择「VS Code 清理」，或运行 `sysbox vscode`。支持 macOS 与 Windows 上默认目录中的 VS Code、VS Code Insiders，以及当前用户目录中的 VS Code Server。
+
+- 清理可重建缓存、扩展安装包缓存、日志和崩溃报告。
+- 旧扩展按版本与平台识别，保留最新版本及默认配置、各 Profile 正在引用的版本；索引缺失或损坏时保守跳过。
+- 旧服务端二进制仅在版本信息足够时列为清理候选，保留同通道最高版本，无法确认的目录保留。旧服务端默认不勾选；手动清理前请停止相关服务端，再次连接相应版本时需要重新下载。
+- 保留设置、快捷键、代码片段、工作区状态、用户数据和未保存文件备份，不扫描自定义数据目录或便携安装目录。
+
+清理前需要退出 VS Code。先运行 `sysbox --dry-run vscode` 可查看扫描结果并演练清理流程。
 
 ## 配置
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/KevinXC5/sysbox/internal/tools/agentjunk"
 	"github.com/KevinXC5/sysbox/internal/tools/jetbrains"
+	"github.com/KevinXC5/sysbox/internal/tools/vscode"
 	"github.com/KevinXC5/sysbox/internal/tui/screens"
 )
 
@@ -18,6 +19,22 @@ func Tools() []screens.Tool {
 				src, err := jetbrains.NewSource()
 				if err != nil {
 					return screens.NewErrorPage([]string{"清理", "JetBrains 缓存"}, err)
+				}
+				return screens.NewClean(src, env)
+			},
+		},
+		{
+			ID: "vscode", Group: "清理", Name: "VS Code 清理", Desc: "旧扩展、旧服务端、缓存与日志",
+			Detail: []string{
+				"清理 VS Code 与 Insiders 的可重建缓存、日志和崩溃报告",
+				"识别旧扩展，保留当前引用和最新版本；旧服务端可手动勾选",
+				"保留设置、用户数据、未保存文件备份和无法确认的版本",
+				"清理前检查运行中的 VS Code，删除前重新核对清理条件",
+			},
+			New: func(env screens.Env) screens.Page {
+				src, err := vscode.NewSource()
+				if err != nil {
+					return screens.NewErrorPage([]string{"清理", "VS Code 清理"}, err)
 				}
 				return screens.NewClean(src, env)
 			},
