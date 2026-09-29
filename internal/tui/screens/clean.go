@@ -496,6 +496,10 @@ func (m *cleanPage) selectedIrreversible() bool {
 	return false
 }
 
+// within 判断 p 位于 root 之下。Windows 路径用反斜杠分隔，两种分隔符都要认
 func within(p, root string) bool {
-	return len(p) > len(root) && p[:len(root)] == root && p[len(root)] == '/'
+	if len(p) <= len(root) || p[:len(root)] != root {
+		return false
+	}
+	return p[len(root)] == '/' || p[len(root)] == '\\'
 }
