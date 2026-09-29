@@ -35,7 +35,7 @@ Windows（PowerShell）：
 irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
 ```
 
-默认安装到 `%LOCALAPPDATA%\Programs\sysbox` 并加入用户 PATH，同样支持 `SYSBOX_INSTALL_DIR` 与 `SYSBOX_VERSION` 环境变量。建议使用 Windows Terminal 运行。
+默认安装到 `%LOCALAPPDATA%\Programs\sysbox` 并加入用户 PATH，当前终端可直接运行 `sysbox`，同样支持 `SYSBOX_INSTALL_DIR` 与 `SYSBOX_VERSION` 环境变量。建议使用 Windows Terminal 运行。
 
 ## 升级
 

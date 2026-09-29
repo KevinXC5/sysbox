@@ -1,4 +1,4 @@
-﻿# sysbox 安装脚本：
+# sysbox 安装脚本：
 #   irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
 #
 # 环境变量：
@@ -114,9 +114,21 @@ try {
             $NewPath = $InstallDir
         }
         [Environment]::SetEnvironmentVariable('Path', $NewPath, 'User')
-        Write-Host ''
-        Write-Host "已把 $InstallDir 加入用户 PATH，重新打开终端后即可使用 sysbox"
+        Write-Ok "已把 $InstallDir 加入用户 PATH"
     }
+    # 用户 PATH 只对新开的终端生效；irm | iex 在当前会话执行，同步更新当前会话 PATH 后可直接运行 sysbox
+    $InSession = $false
+    foreach ($Part in @($env:Path -split ';')) {
+        if ($Part.TrimEnd('\') -eq $InstallDir.TrimEnd('\')) {
+            $InSession = $true
+            break
+        }
+    }
+    if (-not $InSession) {
+        $env:Path = "$InstallDir;$env:Path"
+    }
+    Write-Host ''
+    Write-Host '现在可以运行 sysbox；若提示找不到命令，请关闭并重新打开终端'
 } finally {
     if (Test-Path -LiteralPath $Tmp) {
         Remove-Item -LiteralPath $Tmp -Recurse -Force -ErrorAction SilentlyContinue
