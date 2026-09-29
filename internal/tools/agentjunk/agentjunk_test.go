@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,11 +137,22 @@ func TestScan(t *testing.T) {
 			t.Errorf("当前版本和最高版本不应出现：%s", keep)
 		}
 	}
-	if got[".grok/logs/run.log"].Selected {
-		t.Error("日志默认不应勾选")
+	if got[".grok/logs/run.log"].Selected || !got[".grok/logs/run.log"].Selectable {
+		t.Error("日志应默认可选手动删除")
+	}
+	fresh := got[".claude/cache/fresh"]
+	if !fresh.Selectable || fresh.Selected || !fresh.Irreversible {
+		t.Errorf("保留期内缓存应默认不选但可手动勾选：%+v", fresh)
+	}
+	linked := got[".claude/cache/linked"]
+	if linked.Selectable || !strings.Contains(linked.Note, "不可选") {
+		t.Errorf("外部符号链接必须不可选并说明原因：%+v", linked)
 	}
 	if !got[".claude/cache/old"].Selected {
 		t.Error("过期缓存默认应勾选")
+	}
+	if !got[".local/share/claude/versions/1.0.0"].Selected {
+		t.Error("已确认的旧版本默认应勾选")
 	}
 }
 
@@ -227,12 +239,77 @@ func TestWindowsCopiesAreReviewOnly(t *testing.T) {
 		".grok/downloads/grok-1.0.41-windows-x64.exe",
 	} {
 		it, ok := got[rel]
-		if !ok || it.Category != CatReview || it.Selectable {
-			t.Errorf("%s 应只展示不删除，实际 %+v", rel, it)
+		if !ok || it.Category != CatReview || !it.Selectable || it.Selected || !it.Irreversible {
+			t.Errorf("%s 应进入待核查且默认可选手动删除，实际 %+v", rel, it)
 		}
 	}
 	bak := got[".opencode/bin/opencode-1.2.3.exe"]
-	if bak.Category != CatReview {
-		t.Errorf("Windows 备份应进入待核查：%+v", bak)
+	if bak.Category != CatReview || !bak.Selectable || bak.Selected {
+		t.Errorf("Windows 备份应进入待核查且可手动勾选：%+v", bak)
+	}
+}
+
+func TestRemoveRecentAndReview(t *testing.T) {
+	s := fixture(t)
+	items := scan(t, s)
+	fresh := items[".claude/cache/fresh"]
+	if err := s.Remove(fresh); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(fresh.Path); !os.IsNotExist(err) {
+		t.Fatal("手动选择的近期缓存应删除")
+	}
+	linked := items[".claude/cache/linked"]
+	if err := s.Remove(linked); err == nil {
+		t.Fatal("外部符号链接应拒绝删除")
+	}
+	logItem := items[".grok/logs/run.log"]
+	if err := s.Remove(logItem); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(logItem.Path); !os.IsNotExist(err) {
+		t.Fatal("手动选择的日志应删除")
+	}
+}
+
+func TestRemoveRecentRejectsNewWrites(t *testing.T) {
+	s := fixture(t)
+	fresh := scan(t, s)[".claude/cache/fresh"]
+	// 扫描后又写入新文件，手动勾选的近期缓存也必须拒绝删除
+	p := filepath.Join(fresh.Path, "later.bin")
+	write(t, p)
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(p, future, future); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Remove(fresh); err == nil {
+		t.Fatal("扫描后有新修改的近期缓存应拒绝删除")
+	}
+}
+
+func TestRemoveReviewBackup(t *testing.T) {
+	prev := goos
+	goos = "windows"
+	t.Cleanup(func() { goos = prev })
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".opencode/bin/opencode.exe"))
+	write(t, filepath.Join(home, ".local/bin/opencode.exe"))
+	bakPath := filepath.Join(home, ".opencode/bin/opencode-1.2.3.exe")
+	write(t, bakPath)
+	setAge(t, filepath.Join(home, ".opencode"), 2)
+	setAge(t, filepath.Join(home, ".local/bin"), 2)
+	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	bak := scan(t, s)[".opencode/bin/opencode-1.2.3.exe"]
+	if err := s.Remove(bak); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(bakPath); !os.IsNotExist(err) {
+		t.Fatal("手动选择的疑似备份应删除")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".opencode/bin/opencode.exe")); err != nil {
+		t.Fatal("当前入口不能被连带删除")
 	}
 }

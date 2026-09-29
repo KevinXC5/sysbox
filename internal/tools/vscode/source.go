@@ -89,22 +89,24 @@ func (s *Source) Check() *cleanup.Notice {
 }
 
 func (s *Source) Remove(it cleanup.Item) error {
-	// 界面传来的分类只作提示，真正是否可删仍由磁盘上的重新分类决定
-	if it.Category == CatSkip {
-		return s.Opts.RemoveOptional(it.Path)
+	// 界面传来的分类只作提示，真正是否可删仍由磁盘上的重新分类决定。
+	// 可重建缓存走默认可清理；用户手动勾选的保留项和旧服务端走可选删除。
+	if it.Category == CatClean {
+		return s.Opts.Remove(it.Path)
 	}
-	return s.Opts.Remove(it.Path)
+	return s.Opts.RemoveOptional(it.Path)
 }
 
 func (s *Source) Notes() []string {
 	return []string{
-		"只清理固定白名单中的可重建缓存，未知目录一律保留",
-		"扩展只删除同平台已有更高版本、且没有任何配置档索引引用的旧副本",
+		"默认可清理的是固定白名单中的可重建缓存，以及已确认落后的旧扩展",
+		"设置、当前引用版本和最新版本默认不勾选；手动勾选后无法保证能重建",
 		"旧 CLI 与远程服务端默认不勾选，手动删除后重新连接需要重新下载",
+		"索引损坏、读不到版本、符号链接和各数据根目录本身不能手动纳入",
 		configNote(),
 	}
 }
 
 func (s *Source) Tip() string {
-	return "下次打开 VS Code 会重建缓存；设置、用户数据与最新版本始终保留"
+	return "下次打开 VS Code 会重建缓存；未勾选的保留项仍在本地"
 }

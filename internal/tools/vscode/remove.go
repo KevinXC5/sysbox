@@ -28,18 +28,19 @@ func (o Options) remove(path string, want int) error {
 	return os.RemoveAll(p)
 }
 
-// Remove 删除前重新核对路径边界和当前分类。
+// Remove 删除前重新核对路径边界，只接受默认可清理条目。
 func (o Options) Remove(path string) error {
 	return o.remove(path, CatClean)
 }
 
-// RemoveOptional 删除默认不勾选、但允许手动清理的旧 CLI / 服务端。
+// RemoveOptional 删除默认不勾选、但允许手动清理的普通条目。
+// 重新扫描后它必须仍可勾选，且不再是默认可清理；索引异常和版本不明仍拒绝。
 func (o Options) RemoveOptional(path string) error {
-	return o.remove(path, CatSkip)
+	return o.remove(path, -1)
 }
 
-// recheck 按当前磁盘重新分类，防止扫描后伪造条目或索引变化把配置删掉。
-// 期望分类来自调用方：缓存必须仍是可清理，服务端旧版本必须仍是默认可选手动项。
+// recheck 按当前磁盘重新分类，防止扫描后伪造条目或索引变化把整组删掉。
+// want 为 CatClean 时只接受默认可清理；为 -1 时接受任意仍可勾选的非默认可清理条目。
 func (o Options) recheck(path string, want int) error {
 	items, err := Classify(o)
 	if err != nil {
@@ -47,8 +48,14 @@ func (o Options) recheck(path string, want int) error {
 	}
 	for _, it := range items {
 		if sameClean(it.Path, path) {
-			if it.Category != want || !it.Selectable {
+			if !it.Selectable {
+				return fmt.Errorf("条目不可手动删除：%s", path)
+			}
+			if want == CatClean && it.Category != CatClean {
 				return fmt.Errorf("条目分类已变化：%s", path)
+			}
+			if want != CatClean && it.Category == CatClean {
+				return fmt.Errorf("条目已变为默认可清理，请重新扫描：%s", path)
 			}
 			return nil
 		}
@@ -61,7 +68,7 @@ func sameClean(a, b string) bool {
 }
 
 // allowed 只允许删除各通道应用数据、扩展目录、CLI 根下的真子路径。
-// 根目录本身、User、Backups 以及家目录一律拒绝。
+// 根目录本身和家目录一律拒绝，避免勾选子项时把整棵数据目录删掉。
 func (o Options) allowed(p string) bool {
 	if p == "" || p == o.Home {
 		return false
@@ -80,9 +87,6 @@ func (o Options) allowed(p string) bool {
 				return false
 			}
 		}
-		if blockedUserPath(p, ch) {
-			return false
-		}
 		if within(p, ch.AppRoot) || within(p, ch.ExtRoot) {
 			return true
 		}
@@ -90,17 +94,6 @@ func (o Options) allowed(p string) bool {
 			if within(p, root) {
 				return true
 			}
-		}
-	}
-	return false
-}
-
-// blockedUserPath User 与 Backups 整树拒绝，避免白名单被绕过
-func blockedUserPath(p string, ch Channel) bool {
-	for _, name := range []string{"User", "Backups"} {
-		root := filepath.Join(ch.AppRoot, name)
-		if p == root || within(p, root) {
-			return true
 		}
 	}
 	return false

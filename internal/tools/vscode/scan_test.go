@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KevinXC5/sysbox/internal/cleanup"
 	"github.com/KevinXC5/sysbox/internal/sysx"
 )
 
@@ -34,8 +35,19 @@ func TestClassifyKeepsUnknownAndReferenced(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := map[string]itemView{}
+	full := map[string]cleanup.Item{}
 	for _, it := range items {
 		got[it.Group+"/"+it.Name] = itemView{it.Category, it.Selected}
+		full[it.Group+"/"+it.Name] = it
+	}
+	for _, key := range []string{"Code/User", "Code/Backups", "Code/Session Storage", "Code/mystery", "Code/Local State", "Code/extensions/pub.sample-1.2.0"} {
+		it := full[key]
+		if !it.Selectable || it.Selected || !it.Irreversible {
+			t.Errorf("%s 应默认可选手动删除：selectable=%v selected=%v irreversible=%v", key, it.Selectable, it.Selected, it.Irreversible)
+		}
+	}
+	if nodata := full["Code/cli/nodata"]; nodata.Selectable || !strings.Contains(nodata.Note, "不可选") {
+		t.Errorf("读不到版本的服务端必须不可选并说明原因：%+v", nodata)
 	}
 	want := map[string]itemView{
 		"Code/Cache":                       {CatClean, true},
@@ -61,7 +73,7 @@ func TestClassifyKeepsUnknownAndReferenced(t *testing.T) {
 		"Code/cli/bbbbbbbb":                             {CatKeep, false},
 		"Code/cli/cccccccc":                             {CatKeep, false},
 		"Code/cli/aaaaaaaa/logs":                        {CatClean, true},
-		"Code/cli/nodata":                               {CatKeep, false},
+		"Code/cli/nodata":                               {CatSkip, false},
 	}
 	for k, w := range want {
 		if got[k] != w {
@@ -93,6 +105,9 @@ func TestClassifyBrokenIndexSkipsExtensions(t *testing.T) {
 	for _, it := range items {
 		if it.Name == "extensions" && it.Category == CatSkip {
 			found = true
+			if it.Selectable || !strings.Contains(it.Note, "不可选") {
+				t.Fatal("索引损坏的扩展组必须不可选并说明原因")
+			}
 		}
 	}
 	if !found {
@@ -164,8 +179,17 @@ func TestRemoveOptionalCLIOnly(t *testing.T) {
 		t.Fatal("手动确认后旧服务端应删除")
 	}
 	latest := filepath.Join(o.Channels[0].CLIRoots[0], "bbbbbbbb")
-	if err := o.RemoveOptional(latest); err == nil {
-		t.Fatal("最新服务端不能删除")
+	if err := o.RemoveOptional(latest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(latest); !os.IsNotExist(err) {
+		t.Fatal("用户主动选择后，最新服务端这一份安装应删除")
+	}
+	if _, err := os.Stat(o.Channels[0].CLIRoots[0]); err != nil {
+		t.Fatal("服务端根目录不能被连带删除")
+	}
+	if err := o.RemoveOptional(filepath.Join(o.Channels[0].CLIRoots[0], "nodata")); err == nil {
+		t.Fatal("读不到版本的服务端不能手动删除")
 	}
 }
 

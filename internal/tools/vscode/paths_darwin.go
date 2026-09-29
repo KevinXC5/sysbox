@@ -56,5 +56,5 @@ func forbiddenRoots(o Options) []string {
 
 // configNote 面向用户的保护说明
 func configNote() string {
-	return "不改动 User、Backups 与未识别目录（设置、会话、工作区状态）"
+	return "User、Backups 与未识别目录默认不勾选，手动删除后设置、会话和工作区状态无法恢复"
 }

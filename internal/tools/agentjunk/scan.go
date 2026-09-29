@@ -18,6 +18,8 @@ type ref struct {
 	minAge     time.Duration // 删除时仍须满足的最短未修改时长
 	activeLink string        // 版本类条目：当前版本链接
 	otherLinks []string      // 版本类条目：其他必须一致的命令链接
+	manual     bool          // 用户主动勾选的保留期条目，删除前不再要求已过保留期
+	seen       time.Time     // 手动条目扫描时的最新修改时间，删除前不能更新
 }
 
 // scanner 一次扫描的上下文
@@ -31,7 +33,7 @@ type scanner struct {
 // errItem 记录一个检查失败的路径
 func (s *scanner) errItem(p, agent string, err error) {
 	s.items = append(s.items, cleanup.Item{
-		Path: p, Name: filepath.Base(p), Group: agent, Category: CatError, Note: err.Error(),
+		Path: p, Name: filepath.Base(p), Group: agent, Category: CatError, Note: err.Error() + "（检查失败，不可选）",
 	})
 }
 
@@ -66,13 +68,25 @@ func (s *scanner) add(item, root, agent string, cat int, minAge time.Duration, a
 	}
 	switch {
 	case errors.Is(err, errForeignLink):
-		it.Category, it.Note = CatReview, "目录内含指向外部的符号链接，不自动清理"
+		// 目录内链到外部时不能安全递归删除，只展示原因
+		it.Category, it.Note = CatReview, "目录内含指向外部的符号链接，不可选"
+		it.Selectable = false
 	case err != nil:
 		s.errItem(item, agent, err)
 		return
 	case s.now.Sub(latest) < minAge:
 		days := int(s.now.Sub(latest).Hours() / 24)
-		it.Category, it.Note = CatRecent, fmt.Sprintf("%d 天前有修改，未到 %d 天保留期", days, int(minAge.Hours()/24))
+		id, idErr := identify(item)
+		if idErr != nil {
+			s.errItem(item, agent, idErr)
+			return
+		}
+		it.Category = CatRecent
+		it.Note = fmt.Sprintf("%d 天前有修改，未到 %d 天保留期", days, int(minAge.Hours()/24))
+		it.Selectable = true
+		it.Selected = false
+		it.Irreversible = true
+		it.Ref = ref{root: root, id: id, minAge: 0, activeLink: activeLink, otherLinks: otherLinks, manual: true, seen: latest}
 	default:
 		id, err := identify(item)
 		if err != nil {
@@ -80,7 +94,8 @@ func (s *scanner) add(item, root, agent string, cat int, minAge time.Duration, a
 			return
 		}
 		it.Category, it.Selectable = cat, true
-		it.Selected = cat != CatLog // 日志默认不勾选
+		it.Selected = cat != CatLog // 缓存和旧版本默认勾选；日志默认不勾选
+		it.Irreversible = cat == CatLog
 		it.Note = noteFor(cat, latest, s.now)
 		it.Ref = ref{root: root, id: id, minAge: minAge, activeLink: activeLink, otherLinks: otherLinks}
 	}

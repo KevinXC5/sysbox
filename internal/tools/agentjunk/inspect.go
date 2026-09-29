@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/KevinXC5/sysbox/internal/cleanup"
 )
@@ -35,14 +36,32 @@ func backups(dir, name string) []string {
 	return out
 }
 
-// reviewAll 把疑似文件加入待核查分类
+// reviewAll 把疑似文件加入待核查。默认不勾选，确认后可删，并按不可恢复警示。
 func (s *scanner) reviewAll(paths []string, agent, note string) {
 	for _, p := range paths {
-		it := cleanup.Item{Path: p, Name: filepath.Base(p), Group: agent, Category: CatReview, Note: note}
+		it := cleanup.Item{
+			Path: p, Name: filepath.Base(p), Group: agent, Category: CatReview, Note: note,
+			Selectable: true, Irreversible: true,
+		}
+		if isSymlink(p) {
+			it.Selectable = false
+			it.Irreversible = false
+			it.Note = note + "（符号链接，不可选）"
+		} else if _, err := identify(p); err != nil {
+			it.Category = CatError
+			it.Selectable = false
+			it.Irreversible = false
+			it.Note = err.Error() + "（检查失败，不可选）"
+		}
+		var latest time.Time
 		if fi, err := os.Lstat(p); err == nil {
 			it.IsDir = fi.IsDir()
-			it.Size, _, _ = usage(p, true)
+			it.Size, latest, _ = usage(p, true)
 			it.Sized = true
+		}
+		if it.Selectable {
+			id, _ := identify(p)
+			it.Ref = ref{root: filepath.Dir(p), id: id, manual: true, seen: latest}
 		}
 		s.items = append(s.items, it)
 	}

@@ -14,17 +14,17 @@ const (
 	CatCache  = iota // 超过保留期的缓存
 	CatLog           // 超过保留期的日志，默认不勾选
 	CatOld           // 可确认的旧版本
-	CatRecent        // 保留期内有修改，不清理
-	CatReview        // 疑似可删但无法确认，只展示
-	CatError         // 检查失败
+	CatRecent        // 保留期内有修改，默认不勾选，可手动删除
+	CatReview        // 疑似可删但无法确认，默认不勾选，可手动删除
+	CatError         // 检查失败，不可选
 )
 
 var categories = []cleanup.Category{
 	CatCache:  {Label: "缓存", Tone: cleanup.ToneGood, Primary: true},
 	CatLog:    {Label: "日志", Tone: cleanup.ToneGood, Primary: true},
 	CatOld:    {Label: "旧版本", Tone: cleanup.ToneGood, Primary: true},
-	CatRecent: {Label: "近期使用", Sub: "保留期内", Tone: cleanup.ToneInfo},
-	CatReview: {Label: "待核查", Sub: "只展示不删", Tone: cleanup.ToneWarn},
+	CatRecent: {Label: "近期使用", Sub: "保留期内，可手动勾选", Tone: cleanup.ToneInfo},
+	CatReview: {Label: "待核查", Sub: "未确认，可手动勾选", Tone: cleanup.ToneWarn},
 	CatError:  {Label: "检查失败", Sub: "无法读取", Tone: cleanup.ToneDanger},
 }
 

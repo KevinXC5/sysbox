@@ -84,6 +84,9 @@ func (s *Source) Check() *cleanup.Notice {
 
 // Remove 删除前逐项复核：路径、父目录、inode、版本链接和保留期都必须与扫描时一致
 func (s *Source) Remove(it cleanup.Item) error {
+	if !it.Selectable {
+		return errors.New("条目不可手动删除")
+	}
 	r, ok := it.Ref.(ref)
 	if !ok {
 		return errors.New("条目缺少复核信息，拒绝删除")
@@ -135,6 +138,13 @@ func (r ref) stillSafe(item string, now time.Time) error {
 	if err != nil {
 		return err
 	}
+	// 手动勾选的近期条目不要求已过保留期，但仍拒绝扫描之后又被改过的目标
+	if r.manual {
+		if latest.After(r.seen) {
+			return errors.New("扫描后又有修改")
+		}
+		return nil
+	}
 	if now.Sub(latest) < r.minAge {
 		return errors.New("扫描后又有修改")
 	}
@@ -143,8 +153,9 @@ func (r ref) stillSafe(item string, now time.Time) error {
 
 func (s *Source) Notes() []string {
 	return []string{
-		fmt.Sprintf("只删除 %d 天未修改的缓存与日志；会话、凭据、插件和配置不在范围内", s.KeepDays),
-		"旧版本会保留当前版本与最高版本",
+		fmt.Sprintf("默认只勾选 %d 天未修改的缓存；近期缓存、日志和旧版本可手动勾选", s.KeepDays),
+		"当前版本、最高版本、会话、凭据、插件和配置不在扫描范围内",
+		"指向外部的符号链接和检查失败的条目不能手动纳入",
 		"删除前逐项复核，目标有变化会自动跳过",
 	}
 }

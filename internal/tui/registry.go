@@ -27,8 +27,8 @@ func Tools() []screens.Tool {
 			ID: "vscode", Group: "清理", Name: "VS Code 清理", Desc: "旧扩展、旧服务端、缓存与日志",
 			Detail: []string{
 				"清理 VS Code 与 Insiders 的可重建缓存、日志和崩溃报告",
-				"识别旧扩展，保留当前引用和最新版本；旧服务端可手动勾选",
-				"保留设置、用户数据、未保存文件备份和无法确认的版本",
+				"识别旧扩展，默认保留当前引用和最新版本；旧服务端可手动勾选",
+				"设置、用户数据和未保存文件备份默认不勾选，可手动纳入",
 				"清理前检查运行中的 VS Code，删除前重新核对清理条件",
 			},
 			New: func(env screens.Env) screens.Page {
@@ -42,9 +42,9 @@ func Tools() []screens.Tool {
 		{
 			ID: "agent", Group: "清理", Name: "Agent 垃圾", Desc: "Claude、Codex 等的过期缓存与旧版本",
 			Detail: []string{
-				"清理 Claude、Codex、OpenCode 等 agent 超过保留期的缓存和日志",
+				"默认清理 Claude、Codex、OpenCode 等 agent 超过保留期的缓存",
+				"近期缓存、日志和疑似备份默认不勾选，可手动纳入",
 				"识别可以确认的旧版本，保留当前版本和最高版本",
-				"单文件安装的 agent 只列出疑似备份，交给人工判断",
 				"删除前逐项复核 inode 与版本链接，目标有变化自动跳过",
 			},
 			New: func(env screens.Env) screens.Page {
