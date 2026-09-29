@@ -15,15 +15,22 @@ import (
 
 // Config 用户配置
 type Config struct {
-	Theme  string `json:"theme,omitempty"` // auto / light / dark
-	Agent  Agent  `json:"agent"`
-	Claude Claude `json:"claude"`
-	Update Update `json:"update"`
+	Theme    string   `json:"theme,omitempty"` // auto / light / dark
+	Agent    Agent    `json:"agent"`
+	Projects Projects `json:"projects"`
+	Claude   Claude   `json:"claude"`
+	Update   Update   `json:"update"`
 }
 
 // Agent agent 垃圾清理
 type Agent struct {
 	KeepDays int `json:"keep_days,omitempty"` // 缓存与日志保留天数，默认 30
+}
+
+// Projects 项目构建产物清理
+type Projects struct {
+	Roots    []string `json:"roots,omitempty"`     // 扫描的项目根目录，支持 ~ 开头；为空时自动查找常见目录
+	KeepDays int      `json:"keep_days,omitempty"` // 项目多少天未活动算过期，默认 30
 }
 
 // Claude Claude Code 更新
