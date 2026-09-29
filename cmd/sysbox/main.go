@@ -2,10 +2,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,6 +20,7 @@ import (
 	"github.com/KevinXC5/sysbox/internal/tui"
 	"github.com/KevinXC5/sysbox/internal/tui/screens"
 	"github.com/KevinXC5/sysbox/internal/ui/theme"
+	"github.com/KevinXC5/sysbox/internal/uninstall"
 )
 
 const usage = `sysbox —— 系统维护工具箱
@@ -25,6 +29,9 @@ const usage = `sysbox —— 系统维护工具箱
   sysbox [选项]            打开界面
   sysbox [选项] <工具>     直接打开某个工具，工具名见 sysbox list
   sysbox update            升级到最新版本
+  sysbox uninstall         卸载 sysbox，默认保留配置文件
+      --purge              同时删除配置目录
+      -y                   跳过确认
   sysbox list              列出全部工具
   sysbox version           显示版本号
 
@@ -58,6 +65,8 @@ func main() {
 		}
 	case "update":
 		os.Exit(runUpdate())
+	case "uninstall":
+		os.Exit(runUninstall(flag.Args()[1:], *dryRun))
 	default:
 		if cmd != "" {
 			if _, ok := tui.Find(cmd); !ok {
@@ -166,4 +175,67 @@ func runUpdate() int {
 	}
 	fmt.Printf("已升级到 %s\n", rel.Tag)
 	return 0
+}
+
+// runUninstall 卸载 sysbox：列出将要执行的操作，确认后删除程序、撤销安装时写入的 PATH，
+// 配置目录默认保留，加 --purge 一并删除
+func runUninstall(args []string, dryRun bool) int {
+	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
+	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	purge := fs.Bool("purge", false, "")
+	yes := fs.Bool("y", false, "")
+	fs.BoolVar(yes, "yes", false, "")
+	fs.BoolVar(&dryRun, "dry-run", dryRun, "")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	exe, err := selfupdate.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "无法定位当前可执行文件：", err)
+		return 1
+	}
+	plan, err := uninstall.NewPlan(exe, *purge)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "无法确定配置目录：", err)
+		return 1
+	}
+	fmt.Println("卸载 sysbox 将会：")
+	for _, item := range plan.Items() {
+		fmt.Println("  " + item)
+	}
+	if !*purge {
+		if dir, err := config.Dir(); err == nil {
+			if _, err := os.Stat(dir); err == nil {
+				fmt.Printf("\n保留配置目录 %s，加 --purge 可一并删除\n", dir)
+			}
+		}
+	}
+	if dryRun {
+		fmt.Println("\n演练模式：未做任何修改")
+		return 0
+	}
+	if !*yes && !confirm("\n确认卸载？[y/N] ") {
+		fmt.Println("已取消")
+		return 1
+	}
+	if err := plan.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "卸载失败：", err)
+		return 1
+	}
+	fmt.Println("已卸载 sysbox")
+	if runtime.GOOS == "windows" {
+		fmt.Println("程序文件会在退出后几秒内删除；已打开的终端仍保留旧的 PATH，重新打开后生效")
+	}
+	return 0
+}
+
+// confirm 读取一行回答，只有 y / yes 视为同意；读不到输入（如管道已关闭）时视为拒绝
+func confirm(prompt string) bool {
+	fmt.Print(prompt)
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
 }

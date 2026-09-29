@@ -43,6 +43,15 @@ irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
 - 也可以在命令行执行 `sysbox update`，升级前会列出更新内容
 - 在配置文件中设置 `"update": {"disable_check": true}` 可关闭自动检查
 
+## 卸载
+
+```bash
+sysbox uninstall          # 删除程序，Windows 上同时从用户 PATH 移除安装目录，保留配置文件
+sysbox uninstall --purge  # 同时删除配置目录
+```
+
+卸载前会列出要执行的操作并确认，加 `-y` 跳过确认，加 `--dry-run` 只查看不执行。
+
 ## 使用
 
 ```bash

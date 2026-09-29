@@ -20,6 +20,7 @@ internal/
   sysx/              系统交互：命令执行、进程查询
   cleanup/           “扫描 → 勾选 → 删除”类工具的通用模型
   selfupdate/        从 GitHub Release 检查与安装新版本
+  uninstall/         卸载：删除程序、撤销安装时写入的 PATH、可选删除配置
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
     jetbrains/  vscode/  agentjunk/  claudeupdate/
   ui/
