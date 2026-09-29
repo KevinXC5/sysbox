@@ -4,6 +4,9 @@
 # 全程使用 --dry-run 演练模式和独立的演示配置，不会修改系统，也不会读写真实配置。
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# vhs 会把当前环境传给录制终端，NO_COLOR 或 TERM=dumb 会让截图失去颜色
+unset NO_COLOR
+export TERM=xterm-256color
 
 go build -o bin/sysbox ./cmd/sysbox
 # 演示用的独立配置目录，不触碰真实配置
@@ -63,8 +66,6 @@ Set MarginFill "$margin"
 Set WindowBar Colorful
 Set BorderRadius 12
 Set Theme $term_theme
-# ttyd 不设置 TERM，而 COLORTERM 只有在 TERM 存在时才会把终端升到真彩色
-Env TERM "xterm-256color"
 Env COLORTERM "truecolor"
 Env XDG_CONFIG_HOME "/tmp/sysbox-demo/config"
 EOF
