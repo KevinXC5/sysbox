@@ -61,8 +61,9 @@ type versionRule struct {
 	Link       string         // 指向当前版本的链接；Windows 上常是复制品而不是链接
 	Executable string         // 版本为目录时，目录内的可执行文件；版本为单文件时为空
 	Pattern    *regexp.Regexp // 版本名格式
-	// linkOnly 为真时，入口不是符号链接就无法确认当前版本，只能降级为待核查
-	linkOnly bool
+	// copyEntry 为真时入口可能是复制品：单文件版本按内容比对确认当前版本，
+	// 版本为目录时无法比对，降级为待核查
+	copyEntry bool
 }
 
 var (
@@ -84,14 +85,14 @@ func exe(name string) string {
 }
 
 func versionRules() []versionRule {
-	// Windows 上 Claude 的 claude.exe 是从版本目录复制出来的，不是符号链接；
-	// Codex 的入口同样无法靠链接确认当前版本。linkOnly 让这些规则只展示、不删除。
-	linkOnly := goos == "windows"
+	// Windows 上 Claude 的 claude.exe 是从版本目录复制出来的，不是符号链接，
+	// 需要按内容比对确认当前版本；Codex 的 current 同样无法靠链接确认。
+	copyEntry := goos == "windows"
 	return []versionRule{
 		// Claude 链接直接指向版本文件
-		{"Claude", ".local/share/claude/versions", ".local/bin/" + exe("claude"), "", semverName, linkOnly},
+		{"Claude", ".local/share/claude/versions", ".local/bin/" + exe("claude"), "", semverName, copyEntry},
 		// Codex 链接指向包含 bin/codex 的 release 目录
-		{"Codex", ".codex/packages/standalone/releases", ".codex/packages/standalone/current", "bin/" + exe("codex"), semverName, linkOnly},
+		{"Codex", ".codex/packages/standalone/releases", ".codex/packages/standalone/current", "bin/" + exe("codex"), semverName, copyEntry},
 	}
 }
 

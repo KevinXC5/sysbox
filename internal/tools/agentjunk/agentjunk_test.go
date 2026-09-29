@@ -198,7 +198,20 @@ func TestRemoveRejectsActiveSwitch(t *testing.T) {
 	}
 }
 
-func TestWindowsCopiesAreReviewOnly(t *testing.T) {
+// writeData 写入指定内容，用来区分不同版本的文件
+func writeData(t *testing.T, p, data string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(data), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// windowsHome 按 Windows 原生安装布局搭建：入口都是从版本目录复制出来的 exe
+func windowsHome(t *testing.T) *Source {
+	t.Helper()
 	prev := goos
 	goos = "windows"
 	t.Cleanup(func() { goos = prev })
@@ -208,11 +221,11 @@ func TestWindowsCopiesAreReviewOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	versions := filepath.Join(home, ".local/share/claude/versions")
-	for _, v := range []string{"1.0.0.exe", "1.1.0.exe", "1.2.0.exe"} {
-		write(t, filepath.Join(versions, v))
+	for _, v := range []string{"1.0.0", "1.1.0", "1.2.0"} {
+		writeData(t, filepath.Join(versions, v), "claude "+v)
 	}
-	// 入口是复制品，不是指向版本目录的链接
-	write(t, filepath.Join(home, ".local/bin/claude.exe"))
+	// 当前版本 1.1.0，最高版本 1.2.0 刚下载完还没切换
+	writeData(t, filepath.Join(home, ".local/bin/claude.exe"), "claude 1.1.0")
 
 	releases := filepath.Join(home, ".codex/packages/standalone/releases")
 	write(t, filepath.Join(releases, "0.1.0", "bin/codex.exe"))
@@ -229,12 +242,26 @@ func TestWindowsCopiesAreReviewOnly(t *testing.T) {
 	write(t, filepath.Join(home, ".local/bin/opencode.exe"))
 	write(t, filepath.Join(home, ".opencode/bin/opencode-1.2.3.exe"))
 
-	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	setAge(t, versions, 10)
+	return &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+}
+
+func TestWindowsCopiesMatchedByContent(t *testing.T) {
+	s := windowsHome(t)
 	got := scan(t, s)
 
+	// Claude 入口与 1.1.0 内容一致，可确认 1.0.0 是旧版本
+	old := got[".local/share/claude/versions/1.0.0"]
+	if old.Category != CatOld || !old.Selectable || !old.Selected {
+		t.Errorf("1.0.0 应归为旧版本：%+v", old)
+	}
+	for _, keep := range []string{".local/share/claude/versions/1.1.0", ".local/share/claude/versions/1.2.0"} {
+		if it, ok := got[keep]; ok {
+			t.Errorf("%s 是当前或最高版本，不应出现：%+v", keep, it)
+		}
+	}
+	// Codex 版本是目录、Grok 单独处理，入口是复制品时仍只进待核查
 	for _, rel := range []string{
-		".local/share/claude/versions/1.0.0.exe",
-		".local/share/claude/versions/1.1.0.exe",
 		".codex/packages/standalone/releases/0.1.0",
 		".grok/downloads/grok-1.0.41-windows-x64.exe",
 	} {
@@ -246,6 +273,48 @@ func TestWindowsCopiesAreReviewOnly(t *testing.T) {
 	bak := got[".opencode/bin/opencode-1.2.3.exe"]
 	if bak.Category != CatReview || !bak.Selectable || bak.Selected {
 		t.Errorf("Windows 备份应进入待核查且可手动勾选：%+v", bak)
+	}
+}
+
+func TestWindowsCopyWithoutMatchIsReviewOnly(t *testing.T) {
+	s := windowsHome(t)
+	writeData(t, filepath.Join(s.Home, ".local/bin/claude.exe"), "claude 0.9.0")
+	got := scan(t, s)
+	for _, rel := range []string{".local/share/claude/versions/1.0.0", ".local/share/claude/versions/1.1.0"} {
+		if it := got[rel]; it.Category != CatReview || it.Selected {
+			t.Errorf("%s 在入口无法对应版本时应进入待核查：%+v", rel, it)
+		}
+	}
+}
+
+func TestWindowsCopyRemoveRechecksContent(t *testing.T) {
+	s := windowsHome(t)
+	v := scan(t, s)[".local/share/claude/versions/1.0.0"]
+	// 扫描后入口被换成了 1.0.0 的内容，说明当前版本已切到待删条目
+	writeData(t, filepath.Join(s.Home, ".local/bin/claude.exe"), "claude 1.0.0")
+	if err := s.Remove(v); err == nil {
+		t.Fatal("当前版本切换到该条目后应拒绝删除")
+	}
+	writeData(t, filepath.Join(s.Home, ".local/bin/claude.exe"), "claude 1.1.0")
+	if err := s.Remove(v); err != nil {
+		t.Fatalf("入口仍是 1.1.0 时应能删除：%v", err)
+	}
+}
+
+func TestSameContent(t *testing.T) {
+	dir := t.TempDir()
+	big := strings.Repeat("x", 200<<10)
+	writeData(t, filepath.Join(dir, "a"), big)
+	writeData(t, filepath.Join(dir, "b"), big)
+	writeData(t, filepath.Join(dir, "c"), big[:len(big)-1]+"y")
+	if same, err := sameContent(filepath.Join(dir, "a"), filepath.Join(dir, "b")); err != nil || !same {
+		t.Errorf("内容相同应判为一致：%v %v", same, err)
+	}
+	if same, _ := sameContent(filepath.Join(dir, "a"), filepath.Join(dir, "c")); same {
+		t.Error("末尾字节不同应判为不一致")
+	}
+	if _, err := sameContent(filepath.Join(dir, "a"), filepath.Join(dir, "missing")); err == nil {
+		t.Error("文件不存在应返回错误")
 	}
 }
 

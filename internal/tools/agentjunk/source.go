@@ -116,8 +116,20 @@ func (r ref) stillSafe(item string, now time.Time) error {
 	if id != r.id {
 		return errors.New("文件已被替换")
 	}
-	if r.activeLink != "" {
-		// 扫描时靠链接确认的当前版本，删除前必须仍是链接；复制品无法再确认，拒绝删除
+	if r.copied {
+		// 入口是复制品：删除前重新比对，条目与入口内容相同就说明它已成为当前版本
+		if isSymlink(r.activeLink) {
+			return errors.New("当前版本入口已改变")
+		}
+		same, err := sameContent(r.activeLink, item)
+		if err != nil {
+			return errors.New("当前版本入口异常")
+		}
+		if same {
+			return errors.New("当前版本已切换到该条目")
+		}
+	} else if r.activeLink != "" {
+		// 扫描时靠链接确认的当前版本，删除前必须仍是链接
 		if !isSymlink(r.activeLink) {
 			return errors.New("当前版本链接异常")
 		}

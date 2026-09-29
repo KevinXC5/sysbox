@@ -18,6 +18,7 @@ type ref struct {
 	minAge     time.Duration // 删除时仍须满足的最短未修改时长
 	activeLink string        // 版本类条目：当前版本链接
 	activeDirs []string      // 当前版本允许所在的目录；为空时即 root
+	copied     bool          // 版本类条目：入口是复制品，按文件内容确认当前版本
 	link       bool          // 条目本身是要删除的命令链接
 	manual     bool          // 用户主动勾选的保留期条目，删除前不再要求已过保留期
 	seen       time.Time     // 手动条目扫描时的最新修改时间，删除前不能更新
@@ -132,36 +133,20 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	review := func(note string) {
 		s.items = append(s.items, cleanup.Item{Path: link, Name: r.Link, Group: r.Agent, Category: CatReview, Note: note})
 	}
-	// Windows 原生安装把入口复制成普通 exe，无法用链接判断当前版本。
-	// 宁可整组只展示，也不把可能正在使用的版本标成可删。
-	if r.linkOnly && !isSymlink(link) {
-		s.reviewCopies(root, r, "入口不是符号链接，无法确认当前版本")
-		return
-	}
-	if !isSymlink(link) {
-		return
-	}
-
-	active, err := filepath.EvalSymlinks(link)
-	if err != nil {
-		s.errItem(link, r.Agent, err)
-		return
-	}
-	fi, err := os.Stat(active)
-	if err != nil {
-		s.errItem(active, r.Agent, err)
-		return
-	}
-	if r.Executable != "" {
-		if exe, err := os.Stat(filepath.Join(active, r.Executable)); !fi.IsDir() || err != nil || !exe.Mode().IsRegular() {
+	// Windows 原生安装把入口复制成普通 exe。单文件版本可以按内容比对找出当前版本；
+	// 版本是目录时无从比对，宁可整组只展示，也不把可能正在使用的版本标成可删。
+	copied := !isSymlink(link)
+	if copied {
+		if !r.copyEntry {
 			return
 		}
-	} else if !fi.Mode().IsRegular() {
-		return
-	}
-	if !samePath(filepath.Dir(active), root) {
-		review("当前版本链接未指向版本目录，不自动判断旧版")
-		return
+		if r.Executable != "" {
+			s.reviewCopies(root, r, "入口不是符号链接，无法确认当前版本")
+			return
+		}
+		if fi, err := os.Lstat(link); err != nil || !fi.Mode().IsRegular() {
+			return
+		}
 	}
 
 	type entry struct {
@@ -182,9 +167,43 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 			entries = append(entries, entry{filepath.Join(root, e.Name()), v})
 		}
 	}
+
+	var isActive func(p string) bool
+	if copied {
+		// 与入口逐字节相同的版本文件就是当前版本；比对出错时按当前版本处理，宁可不删
+		isActive = func(p string) bool {
+			same, err := sameContent(p, link)
+			return err != nil || same
+		}
+	} else {
+		active, err := filepath.EvalSymlinks(link)
+		if err != nil {
+			s.errItem(link, r.Agent, err)
+			return
+		}
+		fi, err := os.Stat(active)
+		if err != nil {
+			s.errItem(active, r.Agent, err)
+			return
+		}
+		if r.Executable != "" {
+			if exe, err := os.Stat(filepath.Join(active, r.Executable)); !fi.IsDir() || err != nil || !exe.Mode().IsRegular() {
+				return
+			}
+		} else if !fi.Mode().IsRegular() {
+			return
+		}
+		if !samePath(filepath.Dir(active), root) {
+			review("当前版本链接未指向版本目录，不自动判断旧版")
+			return
+		}
+		isActive = func(p string) bool { return samePath(p, active) }
+	}
+
+	actives := make([]bool, len(entries))
 	newest, found := -1, false
 	for i, e := range entries {
-		if samePath(e.path, active) {
+		if actives[i] = isActive(e.path); actives[i] {
 			found = true
 		}
 		if newest < 0 || compareVersion(e.v, entries[newest].v) > 0 {
@@ -192,12 +211,16 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 		}
 	}
 	if !found {
-		review("无法确认当前版本，不自动判断旧版")
+		if copied {
+			s.reviewCopies(root, r, "入口与各版本文件内容都不同，无法确认当前版本")
+		} else {
+			review("无法确认当前版本，不自动判断旧版")
+		}
 		return
 	}
 	for i, e := range entries {
-		if !samePath(e.path, active) && i != newest {
-			s.add(e.path, root, r.Agent, CatOld, 0, ref{activeLink: link})
+		if !actives[i] && i != newest {
+			s.add(e.path, root, r.Agent, CatOld, 0, ref{activeLink: link, copied: copied})
 		}
 	}
 }

@@ -1,7 +1,9 @@
 package agentjunk
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -122,4 +124,52 @@ func inDirs(p string, dirs []string) bool {
 		}
 	}
 	return false
+}
+
+// sameContent 两个路径都是普通文件且内容逐字节相同。大小不同时不读文件，
+// 用来在 Windows 上认出从版本目录复制出来的入口。
+func sameContent(a, b string) (bool, error) {
+	fa, err := os.Stat(a)
+	if err != nil {
+		return false, err
+	}
+	fb, err := os.Stat(b)
+	if err != nil {
+		return false, err
+	}
+	if !fa.Mode().IsRegular() || !fb.Mode().IsRegular() || fa.Size() != fb.Size() {
+		return false, nil
+	}
+	if os.SameFile(fa, fb) {
+		return true, nil
+	}
+	ra, err := os.Open(a)
+	if err != nil {
+		return false, err
+	}
+	defer ra.Close()
+	rb, err := os.Open(b)
+	if err != nil {
+		return false, err
+	}
+	defer rb.Close()
+	bufA, bufB := make([]byte, 64<<10), make([]byte, 64<<10)
+	for {
+		na, errA := io.ReadFull(ra, bufA)
+		nb, errB := io.ReadFull(rb, bufB)
+		if na != nb || !bytes.Equal(bufA[:na], bufB[:nb]) {
+			return false, nil
+		}
+		endA := errA == io.EOF || errA == io.ErrUnexpectedEOF
+		endB := errB == io.EOF || errB == io.ErrUnexpectedEOF
+		if endA || endB {
+			return endA && endB, nil
+		}
+		if errA != nil {
+			return false, errA
+		}
+		if errB != nil {
+			return false, errB
+		}
+	}
 }
