@@ -17,14 +17,14 @@ const (
 	CatClean    = iota // 可清理：本地可重建的缓存和日志
 	CatSkip            // 跳过：删除后需要重新下载
 	CatKeep            // 保留：元数据、Local History
-	CatLeftover        // 未覆盖：未识别的条目，只展示
+	CatLeftover        // 未覆盖：未识别的条目
 )
 
 var categories = []cleanup.Category{
 	CatClean:    {Label: "可清理", Tone: cleanup.ToneGood, Primary: true},
 	CatSkip:     {Label: "跳过", Sub: "需重新下载", Tone: cleanup.ToneWarn},
 	CatKeep:     {Label: "保留", Sub: "元数据与历史", Tone: cleanup.ToneInfo},
-	CatLeftover: {Label: "未覆盖", Sub: "只展示不删", Tone: cleanup.ToneMuted},
+	CatLeftover: {Label: "未覆盖", Sub: "用途未知", Tone: cleanup.ToneMuted},
 }
 
 // Options 扫描与删除的根路径。
@@ -142,12 +142,13 @@ func Classify(o Options) ([]cleanup.Item, error) {
 	return items, nil
 }
 
-// with 设置分类与说明；可清理分类默认勾选
+// with 设置分类与说明。所有分类都能手动勾选，只有可清理默认勾选；
+// 保留和未覆盖的条目无法确认能否重建，勾选后按不可恢复警示
 func with(it cleanup.Item, cat int, note string) cleanup.Item {
 	it.Category, it.Note = cat, note
-	if cat == CatClean {
-		it.Selectable, it.Selected = true, true
-	}
+	it.Selectable = true
+	it.Selected = cat == CatClean
+	it.Irreversible = cat == CatKeep || cat == CatLeftover
 	return it
 }
 
@@ -163,10 +164,7 @@ func classifyChild(p, group string, e fs.DirEntry) cleanup.Item {
 	case keepRules[name] != "":
 		return with(it, CatKeep, keepRules[name])
 	case name == localHistoryName:
-		// 默认保留，但允许手动纳入清理
-		it = with(it, CatKeep, localHistoryNote)
-		it.Selectable, it.Irreversible = true, true
-		return it
+		return with(it, CatKeep, localHistoryNote)
 	case isLink:
 		return with(it, CatLeftover, noteSymlink)
 	case e.IsDir() && cleanRules[name] != "":

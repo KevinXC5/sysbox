@@ -408,7 +408,7 @@ func (m *cleanPage) detailStatus(i int) string {
 	case it.Irreversible && m.selected[i]:
 		return theme.Fg(theme.Rose).Render("⚠ 已纳入清理，删除后无法恢复")
 	case it.Irreversible:
-		return theme.Fg(theme.Amber).Render("◌ 默认保留，按空格可纳入清理")
+		return theme.Fg(theme.Amber).Render("◌ 默认不删，按空格可纳入清理")
 	case it.Selectable && m.selected[i]:
 		return theme.Fg(theme.Green).Render("✓ 将被清理")
 	case it.Selectable:

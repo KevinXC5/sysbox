@@ -71,7 +71,7 @@ func jetbrainsDetail(goos string) []string {
 	return []string{
 		"清理可本地重建的缓存，包括索引、编译缓存、内嵌浏览器缓存等",
 		logs,
-		"跳过需要重新下载的 Agent 与补全模型",
+		"默认跳过需要重新下载的 Agent 与补全模型，也可手动勾选",
 		keep,
 	}
 }

@@ -13,21 +13,28 @@ import (
 )
 
 // acp-agents 目录结构：<agent>/<版本>/ 为各版本本体，.downloads/<agent>/<版本>/ 为下载包，
-// IDE 升级 agent 后不会删除旧版本，因此每个 agent 只保留最新版本
+// .runtimes/<运行时>/<版本>/ 为共享运行时（如 node）。
+// IDE 升级 agent 或运行时后不会删除旧版本，因此每一项只保留最新版本
 const (
 	acpAgentsName = "acp-agents"
 	acpDownloads  = ".downloads"
+	acpRuntimes   = ".runtimes"
 )
 
 // acpNotes acp-agents 下需要整体保留的条目
 var acpNotes = map[string]string{
 	"registry.json": "Agent 注册表，删除后需要重新下载",
-	".runtimes":     "Agent 共享运行时，删除后需要重新下载",
+}
+
+// acpGrouped acp-agents 下按 <名称>/<版本>/ 组织、需要逐个只保留最新版本的目录
+var acpGrouped = map[string]string{
+	acpDownloads: "下载包",
+	acpRuntimes:  "运行时",
 }
 
 var semverName = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$`)
 
-// classifyAgents 展开 acp-agents 目录，旧版本可清理，最新版本与其余条目跳过
+// classifyAgents 展开 acp-agents 目录，旧版本可清理，本地最新版本与其余条目跳过
 func classifyAgents(p, group string) []cleanup.Item {
 	whole := with(cleanup.Item{Path: p, Name: acpAgentsName, Group: group, IsDir: true}, CatSkip, skipRules[acpAgentsName])
 	entries, err := os.ReadDir(p)
@@ -45,8 +52,8 @@ func classifyAgents(p, group string) []cleanup.Item {
 		switch {
 		case isLink:
 			items = append(items, with(it, CatLeftover, noteSymlink))
-		case e.Name() == acpDownloads && e.IsDir():
-			// 下载包同样按 agent 分目录，逐个只保留最新版本
+		case acpGrouped[e.Name()] != "" && e.IsDir():
+			// 下载包和运行时同样按名称分目录，逐个只保留最新版本
 			subs, err := os.ReadDir(ep)
 			if err != nil {
 				items = append(items, with(it, CatLeftover, noteUnread))
@@ -56,7 +63,7 @@ func classifyAgents(p, group string) []cleanup.Item {
 				sp := filepath.Join(ep, s.Name())
 				sit := cleanup.Item{Path: sp, Name: name + "/" + s.Name(), Group: group, IsDir: s.IsDir()}
 				if s.IsDir() && s.Type()&fs.ModeSymlink == 0 {
-					items = append(items, agentVersions(sp, sit.Name, group, "下载包")...)
+					items = append(items, agentVersions(sp, sit.Name, group, acpGrouped[e.Name()])...)
 				} else {
 					items = append(items, with(sit, CatLeftover, noteUnknown))
 				}
@@ -72,7 +79,7 @@ func classifyAgents(p, group string) []cleanup.Item {
 	return items
 }
 
-// agentVersions 对单个 agent 的版本目录分类：最新版本跳过，更旧的版本可清理，非版本条目只展示
+// agentVersions 对单个 agent 的版本目录分类：本地最新版本跳过，更旧的版本可清理，非版本条目归入未覆盖
 func agentVersions(dir, prefix, group, kind string) []cleanup.Item {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -104,7 +111,7 @@ func agentVersions(dir, prefix, group, kind string) []cleanup.Item {
 	}
 	for i, x := range vers {
 		if i == newest {
-			items = append(items, with(x.it, CatSkip, kind+" 当前版本，删除后需要重新下载"))
+			items = append(items, with(x.it, CatSkip, kind+" 本地最新版本，删除后需要重新下载"))
 		} else {
 			latest := filepath.Base(vers[newest].it.Path)
 			items = append(items, with(x.it, CatClean, kind+" 旧版本，已有 "+latest))

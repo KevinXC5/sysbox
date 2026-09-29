@@ -82,11 +82,11 @@ func (s *Source) Remove(it cleanup.Item) error { return s.Opts.Remove(it.Path) }
 func (s *Source) Notes() []string {
 	return []string{
 		"下次打开 IDE 会重建索引，前几分钟可能偏慢",
-		"Agent 只保留最新版本，补全模型已跳过，不需要重新下载",
+		"跳过项默认不删；手动勾选的 Agent、运行时或模型之后需要重新下载",
 		configNote(),
 	}
 }
 
 func (s *Source) Tip() string {
-	return "下次打开 IDE 会重建索引，最新版 Agent 与补全模型仍在本地"
+	return "下次打开 IDE 会重建索引，未勾选的跳过项仍在本地"
 }

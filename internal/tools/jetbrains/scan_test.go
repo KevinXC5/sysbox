@@ -23,7 +23,7 @@ func fixture(t *testing.T) Options {
 	acp := filepath.Join(ide, "acp-agents")
 	for _, d := range []string{
 		"claude-acp/0.9.0", "claude-acp/0.10.0", "claude-acp/0.10.0-beta.1",
-		"opencode/1.18.32", ".downloads/opencode/1.18.31", ".downloads/opencode/1.18.32", ".runtimes/node",
+		"opencode/1.18.32", ".downloads/opencode/1.18.31", ".downloads/opencode/1.18.32", ".runtimes/node/24.13.0", ".runtimes/node/24.19.0",
 	} {
 		mustMkdir(t, filepath.Join(acp, d))
 	}
@@ -67,7 +67,8 @@ func TestClassify(t *testing.T) {
 		"IntelliJIdea2026.2/acp-agents/opencode/1.18.32":            CatSkip,
 		"IntelliJIdea2026.2/acp-agents/.downloads/opencode/1.18.31": CatClean,
 		"IntelliJIdea2026.2/acp-agents/.downloads/opencode/1.18.32": CatSkip,
-		"IntelliJIdea2026.2/acp-agents/.runtimes":                   CatSkip,
+		"IntelliJIdea2026.2/acp-agents/.runtimes/node/24.13.0":      CatClean,
+		"IntelliJIdea2026.2/acp-agents/.runtimes/node/24.19.0":      CatSkip,
 		"IntelliJIdea2026.2/acp-agents/registry.json":               CatSkip,
 		"IntelliJIdea2026.2/index":                                  CatClean,
 		"IntelliJIdea2026.2/caches":                                 CatClean,
@@ -86,6 +87,58 @@ func TestClassify(t *testing.T) {
 	}
 	if len(got) != len(want) {
 		t.Errorf("条目数量不符：期望 %d，实际 %d", len(want), len(got))
+	}
+}
+
+// 所有分类都能手动勾选，只有可清理默认勾选；保留与未覆盖勾选后按不可恢复警示
+func TestClassifySelection(t *testing.T) {
+	items, err := Classify(fixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range items {
+		if !it.Selectable {
+			t.Errorf("%s 应可手动勾选", it.Name)
+		}
+		if it.Selected != (it.Category == CatClean) {
+			t.Errorf("%s 分类 %d，默认勾选应为 %v", it.Name, it.Category, it.Category == CatClean)
+		}
+		irreversible := it.Category == CatKeep || it.Category == CatLeftover
+		if it.Irreversible != irreversible {
+			t.Errorf("%s 分类 %d，不可恢复标记应为 %v", it.Name, it.Category, irreversible)
+		}
+	}
+}
+
+// 手动勾选的跳过项（如已卸载 Agent 的本地最新版本）可以通过删除校验
+func TestRemoveSkippedAgent(t *testing.T) {
+	o := fixture(t)
+	target := filepath.Join(o.CacheRoot, "IntelliJIdea2026.2", "acp-agents", "opencode", "1.18.32")
+	if err := o.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("opencode 本地最新版本应该已被删除")
+	}
+}
+
+// 条目本身是符号链接时只删链接，不影响目标
+func TestRemoveSymlinkKeepsTarget(t *testing.T) {
+	o := fixture(t)
+	outside := filepath.Join(o.Home, "precious")
+	mustMkdir(t, outside)
+	link := filepath.Join(o.CacheRoot, "IntelliJIdea2026.2", "linked")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Fatal("符号链接应该已被删除")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatal("链接目标不应被删除")
 	}
 }
 
