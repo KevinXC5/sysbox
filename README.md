@@ -138,9 +138,11 @@ sysbox version         # 显示版本号
 
 | | |
 |---|---|
-| ![首页](docs/screenshots/dark/01-home.png) | ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) |
-| ![确认弹窗](docs/screenshots/dark/03-jetbrains-confirm.png) | ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) |
-| ![Agent 垃圾](docs/screenshots/dark/05-agent.png) | ![Claude Code 更新](docs/screenshots/dark/10-claude.png) |
+| ![首页](docs/screenshots/dark/01-home.png) | ![首页一键扫描](docs/screenshots/dark/01-home-scan.png) |
+| ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) | ![确认弹窗](docs/screenshots/dark/03-jetbrains-confirm.png) |
+| ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) | ![Agent 垃圾](docs/screenshots/dark/05-agent.png) |
+| ![VS Code 缓存](docs/screenshots/dark/06-vscode.png) | ![开发缓存](docs/screenshots/dark/07-devcache.png) |
+| ![项目构建产物](docs/screenshots/dark/08-projects.png) | ![Claude Code 更新](docs/screenshots/dark/10-claude.png) |
 
 浅色主题：
 

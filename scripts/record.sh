@@ -63,14 +63,21 @@ Set MarginFill "$margin"
 Set WindowBar Colorful
 Set BorderRadius 12
 Set Theme $term_theme
+# ttyd 不设置 TERM，而 COLORTERM 只有在 TERM 存在时才会把终端升到真彩色
+Env TERM "xterm-256color"
 Env COLORTERM "truecolor"
 Env XDG_CONFIG_HOME "/tmp/sysbox-demo/config"
 EOF
     shot 01-home "" 1.5s
+    # 首页按 s 扫描全部清理工具，等所有工具统计完再截
+    shot 01-home-scan "" 1.5s s Sleep
     shot 02-jetbrains jetbrains 2.5s Down Down
     shot 03-jetbrains-confirm jetbrains 2.5s Enter Right
     shot 04-jetbrains-done jetbrains 2.5s Enter Right Enter Sleep
     shot 05-agent agent 3s
+    shot 06-vscode vscode 3s
+    shot 07-devcache devcache 3s
+    shot 08-projects projects 3s
     shot 10-claude claude 2.5s
   } | sed 's/^Type "Sleep"$/Sleep 5s/' > "$tape"
   vhs "$tape" >/dev/null
