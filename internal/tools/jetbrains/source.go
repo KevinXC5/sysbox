@@ -30,8 +30,12 @@ func (s *Source) Title() string                  { return "JetBrains 缓存" }
 func (s *Source) Categories() []cleanup.Category { return categories }
 
 func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
+	return s.ScanContext(context.Background(), progress)
+}
+
+func (s *Source) ScanContext(ctx context.Context, progress func(string)) ([]cleanup.Item, error) {
 	progress("读取 " + s.Opts.CacheRoot)
-	return Classify(s.Opts)
+	return classifyContext(ctx, s.Opts)
 }
 
 func (s *Source) Roots() []cleanup.Root {

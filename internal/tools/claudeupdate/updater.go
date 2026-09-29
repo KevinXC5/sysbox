@@ -163,6 +163,9 @@ func launcherName() string {
 
 // Current 当前启用的版本：~/.local/bin/claude（Windows 为 claude.exe）指向的版本文件名
 func Current(home string) string {
+	if validateHome(home) != nil {
+		return ""
+	}
 	target, err := filepath.EvalSymlinks(filepath.Join(home, ".local", "bin", launcherName()))
 	if err != nil {
 		return ""
@@ -196,6 +199,9 @@ func ResolveProxy(proxy string, direct bool) (string, string) {
 // Run 完整执行一次更新
 func (u *Updater) Run(ctx context.Context, target string) (Result, error) {
 	var res Result
+	if err := validateHome(u.opt.Home); err != nil {
+		return res, err
+	}
 	if !ValidTarget(target) {
 		return res, fmt.Errorf("无效的目标版本：%s", target)
 	}
@@ -399,7 +405,17 @@ func matches(p, checksum string) bool {
 }
 
 // install 调用新版本自带的 install 子命令完成安装与链接切换
+func validateHome(home string) error {
+	if strings.TrimSpace(home) == "" || !filepath.IsAbs(home) {
+		return errors.New("用户主目录必须是非空绝对路径")
+	}
+	return nil
+}
+
 func (u *Updater) install(ctx context.Context, dest, version string) error {
+	if err := validateHome(u.opt.Home); err != nil {
+		return err
+	}
 	u.emit(Event{Stage: StageInstall, Msg: fmt.Sprintf("调用官方安装，最长等待 %d 秒", int(u.opt.InstallTimeout.Seconds()))})
 	ictx, cancel := context.WithTimeout(ctx, u.opt.InstallTimeout)
 	defer cancel()

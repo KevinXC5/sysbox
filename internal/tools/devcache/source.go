@@ -84,14 +84,32 @@ func (s *Source) Title() string                  { return "开发缓存" }
 func (s *Source) Categories() []cleanup.Category { return categories }
 
 func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
+	return s.ScanContext(context.Background(), progress)
+}
+
+func (s *Source) ScanContext(ctx context.Context, progress func(string)) ([]cleanup.Item, error) {
 	progress("查找 Go、npm、Gradle 等工具的缓存")
-	es := s.loc.entries()
+	// Each pass owns its context and command cache. Do not retain a cancelled
+	// scan context for deletion-time discovery.
+	loc := &locator{home: s.loc.home, goos: s.loc.goos, getenv: s.loc.getenv,
+		lookPath: s.loc.lookPath, runner: s.loc.runner, ctx: ctx}
+	es := loc.entries()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.loc.mu.Lock()
+	s.loc.cache = loc.cache
+	s.loc.mu.Unlock()
 	if len(es) == 0 {
 		return nil, ErrNone
 	}
 	items := make([]cleanup.Item, 0, len(es))
 	for _, e := range es {
-		items = append(items, toItem(e))
+		it := toItem(e)
+		if err := s.loc.safePath(e.path); err != nil {
+			it = locked(it, err.Error())
+		}
+		items = append(items, it)
 	}
 	return items, nil
 }
@@ -186,6 +204,9 @@ func (s *Source) Remove(it cleanup.Item) error {
 	}
 	if e == nil {
 		return fmt.Errorf("条目不在本次扫描结果中：%s", it.Path)
+	}
+	if err := s.loc.safePath(e.path); err != nil {
+		return fmt.Errorf("拒绝删除：%w", err)
 	}
 	fi, err := os.Lstat(e.path)
 	if err != nil {

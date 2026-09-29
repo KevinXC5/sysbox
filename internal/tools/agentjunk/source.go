@@ -50,15 +50,35 @@ func (s *Source) Categories() []cleanup.Category {
 }
 
 func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
-	sc := &scanner{home: s.Home, keep: time.Duration(s.KeepDays) * 24 * time.Hour, now: s.Now()}
+	return s.ScanContext(context.Background(), progress)
+}
+
+// ScanContext 扫描可随调用方取消。
+func (s *Source) ScanContext(ctx context.Context, progress func(string)) ([]cleanup.Item, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if progress == nil {
+		progress = func(string) {}
+	}
+	sc := &scanner{ctx: ctx, home: s.Home, keep: time.Duration(s.KeepDays) * 24 * time.Hour, now: s.Now()}
 	sc.scanDirs(cacheDirs, CatCache, progress)
 	sc.scanDirs(logDirs, CatLog, progress)
 	for _, r := range versionRules() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		sc.scanVersions(r, progress)
 	}
 	sc.scanGrok(progress)
 	sc.inspectBinaries(progress)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	sort.SliceStable(sc.items, func(i, j int) bool { return sc.items[i].Path < sc.items[j].Path })
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return sc.items, nil
 }
 

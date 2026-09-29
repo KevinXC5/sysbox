@@ -82,6 +82,11 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 
 // scanAll 并行扫描全部清理工具
 func (m *Home) scanAll() tea.Cmd {
+	for _, sum := range m.sums {
+		if !sum.done {
+			return nil
+		}
+	}
 	m.gen++
 	m.sums = map[string]*toolSum{}
 	var cmds []tea.Cmd
@@ -96,9 +101,10 @@ func (m *Home) scanAll() tea.Cmd {
 
 // Refresh 从工具页返回后重扫该工具；还没扫描过时什么也不做
 func (m *Home) Refresh(id string) tea.Cmd {
-	if m.sums[id] == nil {
+	if m.sums[id] == nil || !m.sums[id].done {
 		return nil
 	}
+	m.gen++
 	for _, t := range m.tools {
 		if t.ID == id && t.Source != nil {
 			m.sums[id] = &toolSum{gen: m.gen}

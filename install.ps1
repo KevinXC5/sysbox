@@ -6,9 +6,9 @@
 #   SYSBOX_INSTALL_DIR  安装目录，默认 $env:LOCALAPPDATA\Programs\sysbox
 # 已安装后可直接用 sysbox update 升级，界面里也会提示新版本。
 # 兼容 Windows PowerShell 5.1。
+# 在子作用域执行，避免改变调用者的错误策略与函数定义。
+& {
 $ErrorActionPreference = 'Stop'
-# 通过 iex 执行时默认在函数作用域，显式提升后 die 里的 exit 才能结束整个脚本
-Set-StrictMode -Off
 
 $Repo = 'KevinXC5/sysbox'
 if ($env:SYSBOX_INSTALL_DIR) {
@@ -30,7 +30,7 @@ function Write-Ok([string]$Message) {
 }
 function Write-Die([string]$Message) {
     Write-Host ("✗ " + $Message) -ForegroundColor Red
-    exit 1
+    throw $Message
 }
 
 $Arch = switch ($env:PROCESSOR_ARCHITECTURE) {
@@ -56,11 +56,15 @@ try {
     $SumPath = Join-Path $Tmp 'checksums.txt'
 
     Write-Info "下载 $Asset（$Version）"
+    $PreviousSecurityProtocol = [Net.ServicePointManager]::SecurityProtocol
     try {
+        [Net.ServicePointManager]::SecurityProtocol = $PreviousSecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -Uri "$Base/$Asset" -OutFile $BinPath -UseBasicParsing
         Invoke-WebRequest -Uri "$Base/checksums.txt" -OutFile $SumPath -UseBasicParsing
     } catch {
         Write-Die "下载失败：$Base/$Asset"
+    } finally {
+        [Net.ServicePointManager]::SecurityProtocol = $PreviousSecurityProtocol
     }
 
     $Want = ''
@@ -85,7 +89,7 @@ try {
     if (Test-Path -LiteralPath $Dest) {
         $Old = "$Dest.old"
         if (Test-Path -LiteralPath $Old) {
-            Remove-Item -LiteralPath $Old -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $Old -Force -ErrorAction Stop
         }
         try {
             Rename-Item -LiteralPath $Dest -NewName 'sysbox.exe.old' -ErrorAction Stop
@@ -133,4 +137,5 @@ try {
     if (Test-Path -LiteralPath $Tmp) {
         Remove-Item -LiteralPath $Tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
+}
 }

@@ -42,7 +42,15 @@ func (o Options) RemoveOptional(path string) error {
 // recheck 按当前磁盘重新分类，防止扫描后伪造条目或索引变化把整组删掉。
 // want 为 CatClean 时只接受默认可清理；为 -1 时接受任意仍可勾选的非默认可清理条目。
 func (o Options) recheck(path string, want int) error {
-	items, err := Classify(o)
+	// 保留所有相关通道的原有顺序：共享根的首个分类仍优先。
+	relevant := o
+	relevant.Channels = nil
+	for _, ch := range o.Channels {
+		if ch.owns(path) {
+			relevant.Channels = append(relevant.Channels, ch)
+		}
+	}
+	items, err := Classify(relevant)
 	if err != nil {
 		return fmt.Errorf("删除前重新扫描失败：%w", err)
 	}

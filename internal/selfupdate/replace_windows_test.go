@@ -8,6 +8,27 @@ import (
 	"testing"
 )
 
+func TestReplaceExecutableRejectsUndeletableOld(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "sysbox.exe")
+	if err := os.WriteFile(exe, []byte("installed"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(exe+oldSuffix, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(exe+oldSuffix, "keep"), []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceExecutable(filepath.Join(dir, "new"), exe); err == nil {
+		t.Fatal("expected old cleanup error")
+	}
+	got, err := os.ReadFile(exe)
+	if err != nil || string(got) != "installed" {
+		t.Fatalf("installed binary changed: %q %v", got, err)
+	}
+}
+
 func TestReplaceExecutableMovesOldAside(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "sysbox.exe")

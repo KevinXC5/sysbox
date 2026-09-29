@@ -25,6 +25,9 @@ func (l *locator) entries() []entry {
 	for _, f := range []func() []entry{
 		l.goCaches, l.npm, l.pnpm, l.yarn, l.bun, l.pip, l.uv, l.gradle, l.maven, l.cargo, l.homebrew,
 	} {
+		if l.ctx != nil && l.ctx.Err() != nil {
+			break
+		}
 		all = append(all, f()...)
 	}
 	seen := map[string]bool{}

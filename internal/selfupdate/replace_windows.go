@@ -15,7 +15,9 @@ const oldSuffix = ".old"
 // 任一步失败都尽量把旧文件改回去，避免留下无法启动的安装。
 func replaceExecutable(tmp, exe string) error {
 	old := exe + oldSuffix
-	_ = os.Remove(old)
+	if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("无法删除上次升级残留 %s：%w", old, err)
+	}
 	if err := os.Rename(exe, old); err != nil {
 		return fmt.Errorf("无法移开正在运行的程序：%w", err)
 	}

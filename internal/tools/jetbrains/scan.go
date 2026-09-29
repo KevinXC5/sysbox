@@ -3,6 +3,7 @@
 package jetbrains
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -70,6 +71,13 @@ func resolve(p string) string {
 
 // Classify 遍历缓存与日志根目录并分类，不统计大小
 func Classify(o Options) ([]cleanup.Item, error) {
+	return classifyContext(context.Background(), o)
+}
+
+func classifyContext(ctx context.Context, o Options) ([]cleanup.Item, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	tops, err := os.ReadDir(o.CacheRoot)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, ErrNoCache
@@ -80,6 +88,9 @@ func Classify(o Options) ([]cleanup.Item, error) {
 
 	var items []cleanup.Item
 	for _, top := range tops {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		p := filepath.Join(o.CacheRoot, top.Name())
 		base := cleanup.Item{Path: p, Name: top.Name(), Group: "JetBrains", IsDir: top.IsDir()}
 
@@ -109,6 +120,9 @@ func Classify(o Options) ([]cleanup.Item, error) {
 			continue
 		}
 		for _, c := range children {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			cp := filepath.Join(p, c.Name())
 			// 日志在缓存目录内部时单独归到 Logs，避免和缓存子目录重复统计或按未知条目漏掉
 			if o.LogInsideCache && c.Name() == logDirName && c.IsDir() && c.Type()&fs.ModeSymlink == 0 {

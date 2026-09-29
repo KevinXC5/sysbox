@@ -1,6 +1,7 @@
 package agentjunk
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,14 +27,25 @@ type ref struct {
 
 // scanner 一次扫描的上下文
 type scanner struct {
+	ctx   context.Context
 	home  string
 	keep  time.Duration // 缓存与日志的保留期
 	now   time.Time
 	items []cleanup.Item
 }
 
+func (s *scanner) context() context.Context {
+	if s.ctx == nil {
+		return context.Background()
+	}
+	return s.ctx
+}
+
 // errItem 记录一个检查失败的路径
 func (s *scanner) errItem(p, agent string, err error) {
+	if s.context().Err() != nil {
+		return
+	}
 	s.items = append(s.items, cleanup.Item{
 		Path: p, Name: filepath.Base(p), Group: agent, Category: CatError, Note: err.Error() + "（检查失败，不可选）",
 	})
@@ -41,7 +53,13 @@ func (s *scanner) errItem(p, agent string, err error) {
 
 // scanDirs 扫描缓存或日志目录下的一级条目
 func (s *scanner) scanDirs(rules []dirRule, cat int, progress func(string)) {
+	if s.context().Err() != nil {
+		return
+	}
 	for _, r := range rules {
+		if s.context().Err() != nil {
+			return
+		}
 		root := filepath.Join(s.home, r.Rel)
 		if !plainDir(root) {
 			continue
@@ -53,6 +71,9 @@ func (s *scanner) scanDirs(rules []dirRule, cat int, progress func(string)) {
 			continue
 		}
 		for _, e := range entries {
+			if s.context().Err() != nil {
+				return
+			}
 			s.add(filepath.Join(root, e.Name()), root, r.Agent, cat, s.keep, ref{})
 		}
 	}
@@ -61,10 +82,13 @@ func (s *scanner) scanDirs(rules []dirRule, cat int, progress func(string)) {
 // add 统计条目并归类：超过保留期的成为候选，否则归入近期使用。
 // base 携带版本类条目的复核信息，其余字段由 add 填写。
 func (s *scanner) add(item, root, agent string, cat int, minAge time.Duration, base ref) {
+	if s.context().Err() != nil {
+		return
+	}
 	if isSymlink(item) {
 		return
 	}
-	size, latest, err := usage(item, base.activeLink != "")
+	size, latest, err := usageContext(s.context(), item, base.activeLink != "")
 	it := cleanup.Item{Path: item, Name: filepath.Base(item), Group: agent, Size: size, Sized: true}
 	if fi, statErr := os.Lstat(item); statErr == nil {
 		it.IsDir = fi.IsDir()
@@ -120,6 +144,9 @@ func noteFor(cat int, latest, now time.Time) string {
 
 // scanVersions 找出可确认的旧版本：同时保留当前版本和最高版本，防止更新期间误删刚下载的版本
 func (s *scanner) scanVersions(r versionRule, progress func(string)) {
+	if s.context().Err() != nil {
+		return
+	}
 	root := filepath.Join(s.home, r.Dir)
 	link := filepath.Join(s.home, r.Link)
 	if !plainDir(root) {
@@ -161,6 +188,9 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 		return
 	}
 	for _, e := range dirEntries {
+		if s.context().Err() != nil {
+			return
+		}
 		name := versionBase(e.Name())
 		v, ok := parseVersion(name, r.Pattern)
 		wantDir := r.Executable != ""
@@ -199,6 +229,9 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	actives := make([]bool, len(entries))
 	newest, found := -1, false
 	for i, e := range entries {
+		if s.context().Err() != nil {
+			return
+		}
 		if actives[i] = isActive(e.path); actives[i] {
 			found = true
 		}
@@ -211,6 +244,9 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 		return
 	}
 	for i, e := range entries {
+		if s.context().Err() != nil {
+			return
+		}
 		if !actives[i] && i != newest {
 			n := len(s.items)
 			s.add(e.path, root, r.Agent, CatOld, 0, ref{activeLink: link, copied: copied})
@@ -229,6 +265,9 @@ func versionBase(name string) string {
 
 // reviewCopies 无法确认当前版本时，把版本目录里的候选都标成待核查
 func (s *scanner) reviewCopies(root string, r versionRule, note string) {
+	if s.context().Err() != nil {
+		return
+	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		s.errItem(root, r.Agent, err)
@@ -237,6 +276,9 @@ func (s *scanner) reviewCopies(root string, r versionRule, note string) {
 	wantDir := r.Executable != ""
 	var paths []string
 	for _, e := range entries {
+		if s.context().Err() != nil {
+			return
+		}
 		if _, ok := parseVersion(versionBase(e.Name()), r.Pattern); !ok {
 			continue
 		}

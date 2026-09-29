@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"context"
 	"sort"
 	"time"
 
@@ -42,7 +43,10 @@ type (
 	cleanFailedMsg  struct{ err error }
 	cleanScanDone   struct{}
 	cleanScanReady  struct{}
-	cleanCheckedMsg struct{ notice *cleanup.Notice }
+	cleanCheckedMsg struct {
+		notice *cleanup.Notice
+		gen    uint64
+	}
 	cleanRemovedMsg struct {
 		idx int
 		err error
@@ -57,11 +61,14 @@ type cleanLog struct {
 }
 
 type cleanPage struct {
-	src    cleanup.Source
-	cats   []cleanup.Category
-	dryRun bool
-	state  cleanState
-	err    error
+	ctx      context.Context
+	cancel   context.CancelFunc
+	checkGen uint64
+	src      cleanup.Source
+	cats     []cleanup.Category
+	dryRun   bool
+	state    cleanState
+	err      error
 
 	// 扫描
 	ch        chan tea.Msg
@@ -106,45 +113,80 @@ func NewClean(src cleanup.Source, env Env) Page {
 }
 
 func (m *cleanPage) Init() tea.Cmd {
+	m.Close()
+	m.ctx, m.cancel = context.WithCancel(context.Background())
 	m.scanStart = time.Now()
 	m.ch = make(chan tea.Msg, 64)
-	go m.scan(m.ch)
+	go m.scan(m.ctx, m.ch)
 	return tea.Batch(m.spin.Tick, m.wait())
 }
 
-// scan 在后台扫描、统计大小，通过通道把进度逐条发回界面
-func (m *cleanPage) scan(ch chan<- tea.Msg) {
+// Close releases producers even when the page no longer consumes messages.
+func (m *cleanPage) Close() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+}
+
+func (m *cleanPage) scan(ctx context.Context, ch chan<- tea.Msg) {
 	defer close(ch)
-	items, err := m.src.Scan(func(stage string) { ch <- cleanStageMsg{stage} })
-	if err != nil {
-		ch <- cleanFailedMsg{err}
+	send := func(msg tea.Msg) {
+		select {
+		case ch <- msg:
+		case <-ctx.Done():
+		}
+	}
+	progress := func(stage string) { send(cleanStageMsg{stage}) }
+	var items []cleanup.Item
+	var err error
+	if src, ok := m.src.(cleanup.ContextScanner); ok {
+		items, err = src.ScanContext(ctx, progress)
+	} else {
+		items, err = m.src.Scan(progress)
+	}
+	if ctx.Err() != nil {
 		return
 	}
-	ch <- cleanScannedMsg{items}
-
+	if err != nil {
+		send(cleanFailedMsg{err})
+		return
+	}
+	send(cleanScannedMsg{items})
 	var todo []int
+	var paths []string
 	for i, it := range items {
 		if !it.Sized {
 			todo = append(todo, i)
+			paths = append(paths, it.Path)
 		}
 	}
 	if len(todo) > 0 {
-		ch <- cleanStageMsg{"统计占用空间"}
-		paths := make([]string, len(todo))
-		for i, idx := range todo {
-			paths[i] = items[idx].Path
-		}
-		fsx.MeasureAll(paths, 8, func(i int, size int64) { ch <- cleanMeasuredMsg{todo[i], size} })
+		send(cleanStageMsg{"统计占用空间"})
+		fsx.MeasureAllContext(ctx, paths, 8, func(i int, size int64) { send(cleanMeasuredMsg{todo[i], size}) })
 	}
-	ch <- cleanRootsMsg{m.rootSizes()}
+	if ctx.Err() == nil {
+		send(cleanRootsMsg{m.measureRoots(ctx, false)})
+	}
 }
 
-func (m *cleanPage) rootSizes() []int64 {
+func (m *cleanPage) rootSizes() []int64 { return m.measureRoots(context.Background(), false) }
+
+func (m *cleanPage) measureRoots(ctx context.Context, after bool) []int64 {
 	roots := m.src.Roots()
 	sizes := make([]int64, len(roots))
+	var paths []string
+	var indices []int
 	for i, r := range roots {
-		sizes[i] = fsx.DiskUsage(r.Path)
+		if after && r.Untouched {
+			if i < len(m.before) {
+				sizes[i] = m.before[i]
+			}
+			continue
+		}
+		indices = append(indices, i)
+		paths = append(paths, r.Path)
 	}
+	fsx.MeasureAllContext(ctx, paths, 8, func(i int, size int64) { sizes[indices[i]] = size })
 	return sizes
 }
 
@@ -165,6 +207,9 @@ func (m *cleanPage) Busy() bool { return m.state == cleanDeleting }
 func (m *cleanPage) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
+		if m.state != cleanScanning && m.state != cleanChecking && m.state != cleanDeleting {
+			return nil
+		}
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		return cmd
@@ -205,6 +250,9 @@ func (m *cleanPage) Update(msg tea.Msg) tea.Cmd {
 		m.finishScan()
 
 	case cleanCheckedMsg:
+		if m.state != cleanChecking || msg.gen != m.checkGen {
+			return nil
+		}
 		m.notice = msg.notice
 		if m.notice != nil && m.notice.Blocking {
 			m.state = cleanBlocked
@@ -262,12 +310,15 @@ func (m *cleanPage) onKey(k string) tea.Cmd {
 	switch m.state {
 	case cleanList:
 		return m.onListKey(k)
+	case cleanChecking:
+		if k == "esc" || k == "q" {
+			m.checkGen++
+			m.state = cleanList
+		}
 	case cleanConfirm:
 		switch k {
 		case "left", "right", "h", "l", "tab", "shift+tab":
 			m.focusOK = !m.focusOK
-		case "y":
-			return m.startDelete()
 		case "enter":
 			if m.focusOK {
 				return m.startDelete()
@@ -293,6 +344,7 @@ func (m *cleanPage) onKey(k string) tea.Cmd {
 		}
 	case cleanError, cleanScanning:
 		if k == "enter" || k == "esc" || k == "q" {
+			m.Close()
 			return Back
 		}
 	}
@@ -346,6 +398,8 @@ func (m *cleanPage) toggleAll(idxs []int) {
 // check 删除前检查，在后台执行
 func (m *cleanPage) check() tea.Cmd {
 	m.state = cleanChecking
+	m.checkGen++
+	gen := m.checkGen
 	src := m.src
 	var sel []cleanup.Item
 	for i, it := range m.items {
@@ -355,9 +409,9 @@ func (m *cleanPage) check() tea.Cmd {
 	}
 	return tea.Batch(m.spin.Tick, func() tea.Msg {
 		if ic, ok := src.(cleanup.ItemChecker); ok {
-			return cleanCheckedMsg{ic.CheckItems(sel)}
+			return cleanCheckedMsg{ic.CheckItems(sel), gen}
 		}
-		return cleanCheckedMsg{src.Check()}
+		return cleanCheckedMsg{src.Check(), gen}
 	})
 }
 
@@ -377,21 +431,13 @@ func (m *cleanPage) startDelete() tea.Cmd {
 	return tea.Batch(m.spin.Tick, m.removeCmd(m.queue[0]))
 }
 
-// removeCmd 删除单个条目；每项至少停留一小段时间，让进度变化可感知
+// removeCmd 删除单个条目。
 func (m *cleanPage) removeCmd(idx int) tea.Cmd {
 	it, src, dry := m.items[idx], m.src, m.dryRun
-	step := 40 * time.Millisecond
-	if dry {
-		step = 140 * time.Millisecond
-	}
 	return func() tea.Msg {
-		t0 := time.Now()
 		var err error
 		if !dry {
 			err = src.Remove(it)
-		}
-		if d := step - time.Since(t0); d > 0 {
-			time.Sleep(d)
 		}
 		return cleanRemovedMsg{idx, err}
 	}
@@ -416,7 +462,7 @@ func (m *cleanPage) onRemoved(msg cleanRemovedMsg) tea.Cmd {
 		m.state = cleanDone
 		return nil
 	}
-	return func() tea.Msg { return cleanAfterMsg{m.rootSizes()} }
+	return func() tea.Msg { return cleanAfterMsg{m.measureRoots(context.Background(), true)} }
 }
 
 // estimateAfter 演练模式按释放量推算各根目录清理后的大小

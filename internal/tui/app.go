@@ -33,16 +33,56 @@ func watchSystemAppearance() tea.Cmd {
 	})
 }
 
+type pageMsg struct {
+	page screens.Page
+	msg  tea.Msg
+}
+
+func pageCommand(p screens.Page, cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg := cmd()
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			cmds := make([]tea.Cmd, len(batch))
+			for i, c := range batch {
+				cmds[i] = pageCommand(p, c)
+			}
+			return tea.BatchMsg(cmds)
+		}
+		if msg == nil {
+			return nil
+		}
+		return pageMsg{p, msg}
+	}
+}
+
+func closePage(p screens.Page) {
+	if c, ok := p.(interface{ Close() }); ok {
+		c.Close()
+	}
+}
+
+type themeSavedMsg struct {
+	mode string
+	err  error
+}
+
 // App 根模型
 type App struct {
-	w, h       int
-	env        screens.Env
-	home       *screens.Home
-	page       screens.Page // 非空时显示该页面，否则显示首页
-	pageID     string       // 当前页面对应的工具
-	start      string       // 启动后直接打开的工具
-	newVersion string
-	restart    bool
+	themeSaving  bool
+	themePending string
+	themeError   error
+	watching     bool
+	w, h         int
+	env          screens.Env
+	home         *screens.Home
+	page         screens.Page // 非空时显示该页面，否则显示首页
+	pageID       string       // 当前页面对应的工具
+	start        string       // 启动后直接打开的工具
+	newVersion   string
+	restart      bool
 }
 
 // New 创建应用；start 非空时启动后直接打开该工具
@@ -54,7 +94,7 @@ func New(env screens.Env, start string) *App {
 func (a *App) Restart() bool { return a.restart }
 
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.home.Init(), a.checkUpdate(), watchSystemAppearance()}
+	cmds := []tea.Cmd{pageCommand(a.home, a.home.Init()), a.checkUpdate(), a.watchAppearance()}
 	if a.start != "" {
 		cmds = append(cmds, screens.Open(a.start))
 	}
@@ -86,15 +126,46 @@ func (a *App) active() screens.Page {
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if owned, ok := msg.(pageMsg); ok {
+		if owned.page == a.home {
+			switch owned.msg.(type) {
+			case screens.OpenMsg, tea.QuitMsg:
+				msg = owned.msg
+			default:
+				return a, pageCommand(a.home, a.home.Update(owned.msg))
+			}
+		} else {
+			if owned.page != a.page {
+				return a, nil
+			}
+			msg = owned.msg
+		}
+	}
+	switch saved := msg.(type) {
+	case themeSavedMsg:
+		a.themeSaving = false
+		a.themeError = saved.err
+		if a.themePending != "" {
+			mode := a.themePending
+			a.themePending = ""
+			return a, a.saveTheme(mode)
+		}
+		return a, nil
+	}
 	switch msg := msg.(type) {
 	case systemAppearanceMsg:
+		a.watching = false
+		if theme.CurrentMode() != theme.Auto {
+			return a, nil
+		}
 		theme.UpdateSystemAppearance(msg.dark)
-		return a, watchSystemAppearance()
+		return a, a.watchAppearance()
 	case tea.WindowSizeMsg:
 		a.w, a.h = msg.Width, msg.Height
 		return a, nil
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			closePage(a.page)
 			return a, tea.Quit
 		}
 		if msg.String() == "t" && !a.active().Busy() && !typing(a.active()) {
@@ -107,14 +178,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.OpenMsg:
 		return a, a.open(msg.ID)
 	case screens.BackMsg:
-		// 清理后回到首页，已扫描过的汇总随之更新
+		closePage(a.page)
 		a.page = nil
-		return a, a.home.Refresh(a.pageID)
+		return a, pageCommand(a.home, a.home.Refresh(a.pageID))
+	case tea.QuitMsg:
+		closePage(a.page)
+		return a, tea.Quit
 	case screens.RestartMsg:
 		a.restart = true
 		return a, tea.Quit
 	}
-	return a, a.active().Update(msg)
+	return a, pageCommand(a.active(), a.active().Update(msg))
 }
 
 func typing(p screens.Page) bool {
@@ -126,25 +200,46 @@ func typing(p screens.Page) bool {
 func (a *App) open(id string) tea.Cmd {
 	if id == screens.SelfUpdateID {
 		a.page, a.pageID = screens.NewSelfUpdate(a.env), id
-		return a.page.Init()
+		return pageCommand(a.page, a.page.Init())
 	}
 	t, ok := Find(id)
 	if !ok {
 		return nil
 	}
 	a.page, a.pageID = t.New(a.env), id
-	return a.page.Init()
+	return pageCommand(a.page, a.page.Init())
 }
 
 // cycleTheme 同步切换主题，保证本次按键后的重绘就用上新主题；写配置放到后台
 func (a *App) cycleTheme() tea.Cmd {
 	next := theme.NextMode()
 	theme.SetMode(next)
-	return func() tea.Msg {
-		c, _ := config.Load()
-		c.Theme = next.String()
-		_ = config.Save(c)
+	var save tea.Cmd
+	if a.themeSaving {
+		a.themePending = next.String()
+	} else {
+		save = a.saveTheme(next.String())
+	}
+	return tea.Batch(save, a.watchAppearance())
+}
+
+func (a *App) watchAppearance() tea.Cmd {
+	if theme.CurrentMode() != theme.Auto || a.watching {
 		return nil
+	}
+	a.watching = true
+	return watchSystemAppearance()
+}
+
+func (a *App) saveTheme(mode string) tea.Cmd {
+	a.themeSaving = true
+	return func() tea.Msg {
+		c, err := config.Load()
+		if err == nil {
+			c.Theme = mode
+			err = config.Save(c)
+		}
+		return themeSavedMsg{mode, err}
 	}
 }
 
@@ -159,7 +254,11 @@ func (a *App) View() string {
 	}
 	p := a.active()
 	head := widget.Header(a.w, p.Crumbs(), widget.HeaderInfo{DryRun: a.env.DryRun, NewVersion: a.newVersion})
-	foot := widget.Footer(a.w, p.Hints(), p.Status())
+	status := p.Status()
+	if a.themeError != nil {
+		status = theme.Fg(theme.Amber).Render("主题未保存：配置文件读取或写入失败")
+	}
+	foot := widget.Footer(a.w, p.Hints(), status)
 	bodyH := max(1, a.h-lipgloss.Height(head)-lipgloss.Height(foot))
 	return widget.Frame(a.w, a.h, head, p.Body(a.w, bodyH), foot)
 }

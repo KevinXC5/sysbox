@@ -32,10 +32,18 @@ func (s *Source) Title() string                  { return "VS Code 系编辑器"
 func (s *Source) Categories() []cleanup.Category { return categories }
 
 func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
-	if len(s.Opts.Channels) > 0 {
+	return s.ScanContext(context.Background(), progress)
+}
+
+// ScanContext 扫描可随调用方取消。
+func (s *Source) ScanContext(ctx context.Context, progress func(string)) ([]cleanup.Item, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if progress != nil && len(s.Opts.Channels) > 0 {
 		progress("读取 " + s.Opts.Channels[0].AppRoot)
 	}
-	return Classify(s.Opts)
+	return classifyContext(ctx, s.Opts)
 }
 
 // Roots 只列出本机存在的目录，没装的编辑器不出现在完成页

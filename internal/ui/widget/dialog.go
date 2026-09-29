@@ -2,6 +2,7 @@ package widget
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/lipgloss"
@@ -65,16 +66,26 @@ func Overlay(bg, fg string, w, h int) string {
 	return strings.Join(out, "\n")
 }
 
-// Bar 按当前主题创建品牌渐变进度条；每次渲染重建，切换主题后立即生效
+var barCache struct {
+	sync.Mutex
+	key   [3]string
+	model progress.Model
+	ready bool
+}
+
+// Bar reuses the gradient model while updating width and theme colors.
 func Bar(w int, pct float64) string {
-	b := progress.New(
-		progress.WithGradient(theme.Hex(theme.Accent), theme.Hex(theme.Accent2)),
-		progress.WithoutPercentage(),
-		progress.WithFillCharacters('━', '━'),
-		progress.WithWidth(max(1, w)),
-	)
-	b.EmptyColor = theme.Hex(theme.Faint)
-	return b.ViewAs(max(0, min(1, pct)))
+	key := [3]string{theme.Hex(theme.Accent), theme.Hex(theme.Accent2), theme.Hex(theme.Faint)}
+	barCache.Lock()
+	defer barCache.Unlock()
+	if !barCache.ready || barCache.key != key {
+		barCache.model = progress.New(progress.WithGradient(key[0], key[1]),
+			progress.WithoutPercentage(), progress.WithFillCharacters('━', '━'))
+		barCache.model.EmptyColor = key[2]
+		barCache.key, barCache.ready = key, true
+	}
+	barCache.model.Width = max(1, w)
+	return barCache.model.ViewAs(max(0, min(1, pct)))
 }
 
 // ProgressHead 进度类页面的标题行与满宽进度条

@@ -1,6 +1,7 @@
 package agentjunk
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -17,6 +18,13 @@ var errForeignLink = errors.New("目录内含符号链接")
 // usage 统计条目占用的磁盘块和最近修改时间，不跟随链接。
 // allowInternalLinks 为真时允许指向条目自身内部的链接（原生安装包常见），否则遇到链接即报错。
 func usage(item string, allowInternalLinks bool) (size int64, latest time.Time, err error) {
+	return usageContext(context.Background(), item, allowInternalLinks)
+}
+
+func usageContext(ctx context.Context, item string, allowInternalLinks bool) (size int64, latest time.Time, err error) {
+	if err := ctx.Err(); err != nil {
+		return 0, time.Time{}, err
+	}
 	info, err := os.Lstat(item)
 	if err != nil {
 		return 0, time.Time{}, err
@@ -30,6 +38,9 @@ func usage(item string, allowInternalLinks bool) (size int64, latest time.Time, 
 		return 0, time.Time{}, err
 	}
 	err = filepath.WalkDir(item, func(p string, d fs.DirEntry, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			return err
 		}

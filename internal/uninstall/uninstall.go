@@ -12,6 +12,10 @@ import (
 	"github.com/KevinXC5/sysbox/internal/config"
 )
 
+// ErrRemovalPending 表示 Windows 已安排删除，但尚未确认完成。
+// 调用方应立即退出以释放程序文件，且不能报告卸载已完成。
+var ErrRemovalPending = errors.New("已安排删除程序，等待当前进程退出；删除结果将由后台进程报告")
+
 // Plan 卸载时要处理的内容
 type Plan struct {
 	Exe       string // 要删除的可执行文件

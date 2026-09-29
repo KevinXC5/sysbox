@@ -1,6 +1,7 @@
 package vscode
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -36,12 +37,19 @@ type indexState struct {
 // loadIndex 读取扩展目录的 extensions.json，以及各配置档的 extensions.json。
 // 默认索引必须在 extRoot，不在应用数据根。任一索引缺失、为空、损坏或配置档无法确认时跳过。
 func loadIndex(appRoot, extRoot string) indexState {
+	return loadIndexContext(context.Background(), appRoot, extRoot)
+}
+
+func loadIndexContext(ctx context.Context, appRoot, extRoot string) indexState {
 	files := []string{filepath.Join(extRoot, "extensions.json")}
 	profiles := filepath.Join(appRoot, "User", "profiles")
 	entries, err := os.ReadDir(profiles)
 	switch {
 	case err == nil:
 		for _, e := range entries {
+			if ctx.Err() != nil {
+				return indexState{reason: ctx.Err().Error()}
+			}
 			// 符号链接目录可能指向别处，不跟着读，整组跳过
 			if e.Type()&os.ModeSymlink != 0 {
 				return indexState{reason: "配置档目录是符号链接，无法确认扩展引用"}
@@ -64,7 +72,10 @@ func loadIndex(appRoot, extRoot string) indexState {
 	}
 	st := indexState{ok: true, referenced: map[string]string{}}
 	for i, f := range files {
-		refs, ok, reason := readIndexFile(f)
+		if ctx.Err() != nil {
+			return indexState{reason: ctx.Err().Error()}
+		}
+		refs, ok, reason := readIndexFileContext(ctx, f)
 		if !ok {
 			return indexState{reason: reason}
 		}
@@ -72,6 +83,9 @@ func loadIndex(appRoot, extRoot string) indexState {
 			return indexState{reason: "缺少 extensions.json，无法确认哪些扩展正在使用"}
 		}
 		for dir, ver := range refs {
+			if ctx.Err() != nil {
+				return indexState{reason: ctx.Err().Error()}
+			}
 			if prev, ok := st.referenced[dir]; ok && prev != ver {
 				return indexState{reason: "extensions.json 对同一目录给出了不同版本"}
 			}
@@ -96,6 +110,10 @@ type indexEntry struct {
 
 // readIndexFile 解析一份索引。文件不存在时 ok 仍为真（配置档可以没有索引）。
 func readIndexFile(path string) (map[string]string, bool, string) {
+	return readIndexFileContext(context.Background(), path)
+}
+
+func readIndexFileContext(ctx context.Context, path string) (map[string]string, bool, string) {
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return nil, true, ""
@@ -113,6 +131,9 @@ func readIndexFile(path string) (map[string]string, bool, string) {
 	}
 	out := map[string]string{}
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err().Error()
+		}
 		dir := e.RelativeLocation
 		if dir == "" {
 			dir = filepath.Base(filepath.FromSlash(e.Location.Path))

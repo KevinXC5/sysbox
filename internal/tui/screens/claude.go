@@ -74,7 +74,10 @@ type claudePage struct {
 
 // NewClaude 创建 Claude Code 更新页
 func NewClaude(env Env) Page {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return NewErrorPage([]string{"Claude Code"}, fmt.Errorf("无法确定用户主目录: %v", err))
+	}
 	in := textinput.New()
 	in.Placeholder = "2.1.300"
 	in.CharLimit = 40

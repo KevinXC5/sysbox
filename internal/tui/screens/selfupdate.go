@@ -88,6 +88,9 @@ func (m *selfUpdatePage) Busy() bool { return m.state == upInstalling }
 func (m *selfUpdatePage) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
+		if m.state != upChecking && m.state != upInstalling {
+			return nil
+		}
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		return cmd

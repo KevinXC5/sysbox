@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -25,15 +26,25 @@ type found struct {
 
 // walk 在 root 下查找构建产物，命中后不再深入该产物目录
 func walk(root string) []found {
+	return walkContext(context.Background(), root, time.Time{})
+}
+
+func walkContext(ctx context.Context, root string, now time.Time) []found {
 	var out []found
 	active := map[string]time.Time{}
 	var visit func(dir string, depth int)
 	visit = func(dir string, depth int) {
+		if ctx.Err() != nil {
+			return
+		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return
 		}
 		for _, e := range entries {
+			if ctx.Err() != nil {
+				return
+			}
 			// 不跟随符号链接，避免扫出项目根之外的目录
 			if !e.IsDir() || e.Type()&fs.ModeSymlink != 0 {
 				continue
@@ -41,7 +52,7 @@ func walk(root string) []found {
 			name := e.Name()
 			if r, ok := match(dir, name); ok {
 				if _, ok := active[dir]; !ok {
-					active[dir] = activity(dir)
+					active[dir] = activityContext(ctx, dir, now)
 				}
 				p := filepath.Join(dir, name)
 				t := active[dir]
@@ -65,6 +76,10 @@ func walk(root string) []found {
 // activity 项目最近活跃时间：版本库状态文件与浅层源码的最新修改时间。
 // 产物目录和隐藏目录不计入，条目太多时提前停止，只求近似。
 func activity(project string) time.Time {
+	return activityContext(context.Background(), project, time.Time{})
+}
+
+func activityContext(ctx context.Context, project string, now time.Time) time.Time {
 	var latest time.Time
 	bump := func(t time.Time) {
 		if t.After(latest) {
@@ -77,14 +92,25 @@ func activity(project string) time.Time {
 			bump(fi.ModTime())
 		}
 	}
+	// 一旦已知不足一天前有活动，后续更晚信号仍显示“今天”。
+	// 其他日期继续沿用原来的浅层源码扫描，保留准确的天数文案。
+	if !now.IsZero() && !latest.IsZero() && now.Sub(latest) < 24*time.Hour {
+		return latest
+	}
 	seen := 0
 	var visit func(dir string, depth int)
 	visit = func(dir string, depth int) {
+		if ctx.Err() != nil {
+			return
+		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return
 		}
 		for _, e := range entries {
+			if ctx.Err() != nil {
+				return
+			}
 			if seen >= activityLimit {
 				return
 			}

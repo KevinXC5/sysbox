@@ -12,6 +12,9 @@ import (
 // 安装器有时把版本放在 bin，有时放在 downloads，还会另建一个可能指向旧版的 agent 链接；
 // 除当前版本外，两处的其他版本和 agent 链接都作为旧版本候选。
 func (s *scanner) scanGrok(progress func(string)) {
+	if s.context().Err() != nil {
+		return
+	}
 	bin := filepath.Join(s.home, grokBin)
 	link := filepath.Join(bin, exe("grok"))
 	if !plainDir(bin) {
@@ -23,6 +26,9 @@ func (s *scanner) scanGrok(progress func(string)) {
 	progress("检查 Grok 旧版本")
 	var dirs []string
 	for _, rel := range []string{grokBin, grokDownloads} {
+		if s.context().Err() != nil {
+			return
+		}
 		if d := filepath.Join(s.home, rel); plainDir(d) {
 			dirs = append(dirs, d)
 		}
@@ -31,6 +37,9 @@ func (s *scanner) scanGrok(progress func(string)) {
 		// Windows 原生安装把入口复制成普通 exe，无法确认当前版本，只展示不自动勾选
 		if goos == "windows" {
 			for _, d := range dirs {
+				if s.context().Err() != nil {
+					return
+				}
 				s.reviewAll(grokVersions(d), "Grok", "入口不是符号链接，无法确认当前版本")
 			}
 		}
@@ -51,7 +60,13 @@ func (s *scanner) scanGrok(progress func(string)) {
 
 	base := ref{activeLink: link, activeDirs: dirs}
 	for _, d := range dirs {
+		if s.context().Err() != nil {
+			return
+		}
 		for _, p := range grokVersions(d) {
+			if s.context().Err() != nil {
+				return
+			}
 			if samePath(p, active) {
 				continue
 			}
@@ -65,6 +80,9 @@ func (s *scanner) scanGrok(progress func(string)) {
 
 	// agent 是安装器额外创建的命令链接，只删链接本身，不影响 grok
 	for _, agent := range s.grokAgentLinks(bin) {
+		if s.context().Err() != nil {
+			return
+		}
 		id, err := identify(agent)
 		if err != nil {
 			s.errItem(agent, "Grok", err)
@@ -88,6 +106,9 @@ func (s *scanner) scanGrok(progress func(string)) {
 // ~/.grok/bin 不在 PATH 时安装器还会在 ~/.local/bin 或 /usr/local/bin 再建一份，
 // 这两处的 agent 可能属于其他工具，只认指向 ~/.grok 内的链接（目标已删除的悬空链接也算）。
 func (s *scanner) grokAgentLinks(bin string) []string {
+	if s.context().Err() != nil {
+		return nil
+	}
 	var out []string
 	if p := filepath.Join(bin, exe("agent")); isSymlink(p) {
 		out = append(out, p)
@@ -97,6 +118,9 @@ func (s *scanner) grokAgentLinks(bin string) []string {
 	}
 	grokHome := filepath.Join(s.home, ".grok")
 	for _, dir := range []string{filepath.Join(s.home, ".local/bin"), grokSystemBin} {
+		if s.context().Err() != nil {
+			return nil
+		}
 		p := filepath.Join(dir, "agent")
 		if !plainDir(dir) || !isSymlink(p) {
 			continue

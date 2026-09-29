@@ -20,6 +20,7 @@ type locator struct {
 	getenv   func(string) string
 	lookPath func(string) (string, error)
 	runner   sysx.Runner
+	ctx      context.Context // immutable context of a discovery pass
 
 	mu    sync.Mutex
 	cache map[string][]string // 命令输出缓存，删除前复核时不必重复启动外部命令
@@ -41,7 +42,11 @@ func (l *locator) ask(name string, args ...string) []string {
 	}
 	var lines []string
 	if _, err := l.lookPath(name); err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		parent := l.ctx
+		if parent == nil {
+			parent = context.Background()
+		}
+		ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 		out, err := l.runner.Run(ctx, sysx.C(name, args...))
 		cancel()
 		if err == nil {

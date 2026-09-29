@@ -3,6 +3,7 @@
 package vscode
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -67,23 +68,36 @@ func resolve(p string) string {
 
 // Classify 扫描全部通道。大小留给界面统计。
 func Classify(o Options) ([]cleanup.Item, error) {
+	return classifyContext(context.Background(), o)
+}
+
+func classifyContext(ctx context.Context, o Options) ([]cleanup.Item, error) {
 	var items []cleanup.Item
 	var any bool
 	for _, ch := range o.Channels {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if st, err := os.Stat(ch.AppRoot); err == nil && st.IsDir() {
 			any = true
-			items = append(items, classifyApp(ch)...)
+			items = append(items, classifyAppContext(ctx, ch)...)
 		}
 		if st, err := os.Stat(ch.ExtRoot); err == nil && st.IsDir() {
 			any = true
-			items = append(items, classifyExtensions(ch)...)
+			items = append(items, classifyExtensionsContext(ctx, ch)...)
 		}
 		for _, root := range ch.CLIRoots {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if st, err := os.Stat(root); err == nil && st.IsDir() {
 				any = true
-				items = append(items, classifyCLI(ch, root)...)
+				items = append(items, classifyCLIContext(ctx, ch, root)...)
 			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if !any {
 		return nil, ErrNoData
@@ -92,12 +106,19 @@ func Classify(o Options) ([]cleanup.Item, error) {
 }
 
 func classifyApp(ch Channel) []cleanup.Item {
+	return classifyAppContext(context.Background(), ch)
+}
+
+func classifyAppContext(ctx context.Context, ch Channel) []cleanup.Item {
 	entries, err := os.ReadDir(ch.AppRoot)
 	if err != nil {
 		return []cleanup.Item{locked(ch.AppRoot, ch.Name, ch.Name, true, noteUnread, "无法读取数据目录，不可选")}
 	}
 	var items []cleanup.Item
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return nil
+		}
 		p := filepath.Join(ch.AppRoot, e.Name())
 		name := e.Name()
 		link := e.Type()&fs.ModeSymlink != 0
@@ -118,7 +139,11 @@ func classifyApp(ch Channel) []cleanup.Item {
 }
 
 func classifyExtensions(ch Channel) []cleanup.Item {
-	idx := loadIndex(ch.AppRoot, ch.ExtRoot)
+	return classifyExtensionsContext(context.Background(), ch)
+}
+
+func classifyExtensionsContext(ctx context.Context, ch Channel) []cleanup.Item {
+	idx := loadIndexContext(ctx, ch.AppRoot, ch.ExtRoot)
 	if !idx.ok {
 		return []cleanup.Item{locked(ch.ExtRoot, "extensions", ch.Name, true, idx.reason, "索引异常，无法确认引用，整组不可选")}
 	}
@@ -138,6 +163,9 @@ func classifyExtensions(ch Channel) []cleanup.Item {
 	var all []inst
 	var items []cleanup.Item
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return nil
+		}
 		p := filepath.Join(ch.ExtRoot, e.Name())
 		name := e.Name()
 		if name == ".obsolete" || strings.HasPrefix(name, ".") {
@@ -166,12 +194,18 @@ func classifyExtensions(ch Channel) []cleanup.Item {
 	// 同扩展同平台里的最高版本，以及索引正在引用的目录，默认不删
 	latest := map[string]string{}
 	for _, x := range all {
+		if ctx.Err() != nil {
+			return nil
+		}
 		k := x.ext.id.key()
 		if prev, ok := latest[k]; !ok || olderThan(prev, x.ext.version) {
 			latest[k] = x.ext.version
 		}
 	}
 	for _, x := range all {
+		if ctx.Err() != nil {
+			return nil
+		}
 		refVer, referenced := idx.referenced[strings.ToLower(x.ext.dir)]
 		switch {
 		case referenced:
@@ -191,6 +225,10 @@ func classifyExtensions(ch Channel) []cleanup.Item {
 // classifyCLI 只比较同一通道、同一质量（stable/insider）下能读到产品版本的安装。
 // 目录名里的提交哈希不能当版本排序；读不到 product.json 或 package.json 就不可选。
 func classifyCLI(ch Channel, root string) []cleanup.Item {
+	return classifyCLIContext(context.Background(), ch, root)
+}
+
+func classifyCLIContext(ctx context.Context, ch Channel, root string) []cleanup.Item {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return []cleanup.Item{locked(root, filepath.Base(root), ch.Name+"/cli", true, noteUnread, "无法读取服务端目录，不可选")}
@@ -204,6 +242,9 @@ func classifyCLI(ch Channel, root string) []cleanup.Item {
 	var found []inst
 	var items []cleanup.Item
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return nil
+		}
 		p := filepath.Join(root, e.Name())
 		if e.Type()&fs.ModeSymlink != 0 {
 			items = append(items, locked(p, e.Name(), ch.Name+"/cli", false, noteUnknown, "符号链接，只展示，不跟随目标"))
@@ -221,15 +262,21 @@ func classifyCLI(ch Channel, root string) []cleanup.Item {
 		}
 		found = append(found, inst{name: e.Name(), path: p, version: ver, quality: quality})
 		// 安装目录内部的可重建缓存单独列出，不把整个旧服务端当成默认可删
-		items = append(items, classifyServerCache(p, ch.Name+"/cli/"+e.Name())...)
+		items = append(items, classifyServerCacheContext(ctx, p, ch.Name+"/cli/"+e.Name())...)
 	}
 	latest := map[string]string{}
 	for _, x := range found {
+		if ctx.Err() != nil {
+			return nil
+		}
 		if prev, ok := latest[x.quality]; !ok || olderThan(prev, x.version) {
 			latest[x.quality] = x.version
 		}
 	}
 	for _, x := range found {
+		if ctx.Err() != nil {
+			return nil
+		}
 		it := cleanup.Item{Path: x.path, Name: x.name, Group: ch.Name + "/cli", IsDir: true}
 		if !olderThan(x.version, latest[x.quality]) {
 			// 同质量最高版本默认保留；用户主动勾选时只删这一份安装，不碰 CLI 根
@@ -246,12 +293,19 @@ func classifyCLI(ch Channel, root string) []cleanup.Item {
 // classifyServerCache 只扫服务端安装根下的固定缓存名，不递归未知目录。
 // 这些缓存可以本地重建，与“哪个提交正在被连接使用”无关。
 func classifyServerCache(install, group string) []cleanup.Item {
+	return classifyServerCacheContext(context.Background(), install, group)
+}
+
+func classifyServerCacheContext(ctx context.Context, install, group string) []cleanup.Item {
 	entries, err := os.ReadDir(install)
 	if err != nil {
 		return nil
 	}
 	var items []cleanup.Item
 	for _, e := range entries {
+		if ctx.Err() != nil {
+			return nil
+		}
 		if e.Type()&fs.ModeSymlink != 0 || !e.IsDir() {
 			continue
 		}

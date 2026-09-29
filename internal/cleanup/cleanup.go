@@ -2,6 +2,13 @@
 // 各清理工具实现 Source 接口，界面层用同一套页面展示和执行。
 package cleanup
 
+import "context"
+
+// ContextScanner 可选的可取消扫描接口；实现应在遍历和耗时操作中检查 ctx。
+type ContextScanner interface {
+	ScanContext(ctx context.Context, progress func(string)) ([]Item, error)
+}
+
 // Tone 分类的语义色调，界面据此选择颜色
 type Tone int
 

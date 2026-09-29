@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -218,13 +219,18 @@ func runUninstall(args []string, dryRun bool) int {
 		fmt.Println("已取消")
 		return 1
 	}
-	if err := plan.Run(); err != nil {
+	if err := plan.Run(); errors.Is(err, uninstall.ErrRemovalPending) {
+		// 正在运行的 exe 只能等本进程退出后删除，结果由后台进程输出
+		fmt.Println("配置与 PATH 已处理；程序文件将在本进程退出后删除，请留意随后输出的删除结果")
+		fmt.Println("已打开的终端仍保留旧的 PATH，重新打开后生效")
+		return 0
+	} else if err != nil {
 		fmt.Fprintln(os.Stderr, "卸载失败：", err)
 		return 1
 	}
 	fmt.Println("已卸载 sysbox")
 	if runtime.GOOS == "windows" {
-		fmt.Println("程序文件会在退出后几秒内删除；已打开的终端仍保留旧的 PATH，重新打开后生效")
+		fmt.Println("已打开的终端仍保留旧的 PATH，重新打开后生效")
 	}
 	return 0
 }

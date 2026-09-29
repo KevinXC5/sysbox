@@ -38,7 +38,13 @@ func backups(dir, name string) []string {
 
 // reviewAll 把疑似文件加入待核查。默认不勾选，确认后可删，并按不可恢复警示。
 func (s *scanner) reviewAll(paths []string, agent, note string) {
+	if s.context().Err() != nil {
+		return
+	}
 	for _, p := range paths {
+		if s.context().Err() != nil {
+			return
+		}
 		it := cleanup.Item{
 			Path: p, Name: filepath.Base(p), Group: agent, Category: CatReview, Note: note,
 			Selectable: true, Irreversible: true,
@@ -56,7 +62,7 @@ func (s *scanner) reviewAll(paths []string, agent, note string) {
 		var latest time.Time
 		if fi, err := os.Lstat(p); err == nil {
 			it.IsDir = fi.IsDir()
-			it.Size, latest, _ = usage(p, true)
+			it.Size, latest, _ = usageContext(s.context(), p, true)
 			it.Sized = true
 		}
 		if it.Selectable {
@@ -69,6 +75,9 @@ func (s *scanner) reviewAll(paths []string, agent, note string) {
 
 // singleBinary 检查单文件安装：entry 是命令入口，binary 是实际文件；alias 表示入口应为指向 binary 的链接
 func (s *scanner) singleBinary(agent, entry, binary string, alias bool) {
+	if s.context().Err() != nil {
+		return
+	}
 	entry, binary = filepath.Join(s.home, entry), filepath.Join(s.home, binary)
 	fi, err := os.Lstat(binary)
 	if err != nil || !fi.Mode().IsRegular() {
@@ -95,6 +104,9 @@ func (s *scanner) singleBinary(agent, entry, binary string, alias bool) {
 
 // inspectBinaries 核查 OpenCode、omp、pi、fx 的安装，只报告不清理
 func (s *scanner) inspectBinaries(progress func(string)) {
+	if s.context().Err() != nil {
+		return
+	}
 	progress("核查 OpenCode、omp、pi、fx 的安装")
 	s.singleBinary("OpenCode", ".local/bin/"+exe("opencode"), ".opencode/bin/"+exe("opencode"), true)
 	s.singleBinary("omp", ".local/bin/"+exe("omp"), ".local/bin/"+exe("omp"), false)
@@ -106,6 +118,9 @@ func (s *scanner) inspectBinaries(progress func(string)) {
 		var versions []string
 		entries, _ := os.ReadDir(natives)
 		for _, e := range entries {
+			if s.context().Err() != nil {
+				return
+			}
 			if e.IsDir() && semverName.MatchString(e.Name()) {
 				versions = append(versions, filepath.Join(natives, e.Name()))
 			}
@@ -119,6 +134,9 @@ func (s *scanner) inspectBinaries(progress func(string)) {
 	if cmd, err := exec.LookPath("pi"); err == nil && isSymlink(cmd) {
 		if real, err := filepath.EvalSymlinks(cmd); err == nil {
 			for dir := filepath.Dir(real); dir != "/" && dir != "."; dir = filepath.Dir(dir) {
+				if s.context().Err() != nil {
+					return
+				}
 				if filepath.Base(dir) == "pi-coding-agent" && filepath.Base(filepath.Dir(dir)) == "@earendil-works" {
 					s.reviewAll(backups(filepath.Dir(dir), "pi-coding-agent"), "pi", "疑似旧包，未确认是否可删")
 					break

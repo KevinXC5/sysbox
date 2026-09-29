@@ -3,6 +3,7 @@
 package projects
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -127,14 +128,33 @@ func (s *Source) Categories() []cleanup.Category {
 }
 
 func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
+	return s.ScanContext(context.Background(), progress)
+}
+
+// ScanContext 扫描可随调用方取消。
+func (s *Source) ScanContext(ctx context.Context, progress func(string)) ([]cleanup.Item, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	now := s.Now()
 	keep := time.Duration(s.KeepDays) * 24 * time.Hour
 	var items []cleanup.Item
 	for _, root := range s.Dirs {
-		progress("扫描 " + fsx.PrettyPath(root))
-		for _, f := range walk(root) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if progress != nil {
+			progress("扫描 " + fsx.PrettyPath(root))
+		}
+		for _, f := range walkContext(ctx, root, now) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			items = append(items, s.toItem(f, now, keep))
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return items, nil
 }
