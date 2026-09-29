@@ -61,8 +61,8 @@ type versionRule struct {
 	Link       string         // 指向当前版本的链接；Windows 上常是复制品而不是链接
 	Executable string         // 版本为目录时，目录内的可执行文件；版本为单文件时为空
 	Pattern    *regexp.Regexp // 版本名格式
-	// copyEntry 为真时入口可能是复制品：单文件版本按内容比对确认当前版本，
-	// 版本为目录时无法比对，降级为待核查
+	// copyEntry 为真时入口可能是复制品：单文件版本的入口独立于版本目录，只保留最高版本；
+	// 版本为目录时无法确认入口是否独立，降级为待核查
 	copyEntry bool
 }
 
@@ -85,8 +85,8 @@ func exe(name string) string {
 }
 
 func versionRules() []versionRule {
-	// Windows 上 Claude 的 claude.exe 是从版本目录复制出来的，不是符号链接，
-	// 需要按内容比对确认当前版本；Codex 的 current 同样无法靠链接确认。
+	// Windows 上 Claude 的 claude.exe 是从版本目录复制出来的独立文件，不是符号链接；
+	// Codex 的 current 无法靠链接确认当前版本。
 	copyEntry := goos == "windows"
 	return []versionRule{
 		// Claude 链接直接指向版本文件

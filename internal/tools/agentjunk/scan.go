@@ -18,7 +18,7 @@ type ref struct {
 	minAge     time.Duration // 删除时仍须满足的最短未修改时长
 	activeLink string        // 版本类条目：当前版本链接
 	activeDirs []string      // 当前版本允许所在的目录；为空时即 root
-	copied     bool          // 版本类条目：入口是复制品，按文件内容确认当前版本
+	copied     bool          // 版本类条目：入口是独立的复制品，不依赖版本目录
 	link       bool          // 条目本身是要删除的命令链接
 	manual     bool          // 用户主动勾选的保留期条目，删除前不再要求已过保留期
 	seen       time.Time     // 手动条目扫描时的最新修改时间，删除前不能更新
@@ -133,8 +133,9 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 	review := func(note string) {
 		s.items = append(s.items, cleanup.Item{Path: link, Name: r.Link, Group: r.Agent, Category: CatReview, Note: note})
 	}
-	// Windows 原生安装把入口复制成普通 exe。单文件版本可以按内容比对找出当前版本；
-	// 版本是目录时无从比对，宁可整组只展示，也不把可能正在使用的版本标成可删。
+	// Windows 原生安装把版本文件复制成入口 exe，运行时不再依赖版本目录，
+	// 单文件版本只需保留最高版本（可能是下载完还没装上的更新）。
+	// 版本是目录时无法确认入口是否独立，宁可整组只展示。
 	copied := !isSymlink(link)
 	if copied {
 		if !r.copyEntry {
@@ -168,14 +169,9 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 		}
 	}
 
-	var isActive func(p string) bool
-	if copied {
-		// 与入口逐字节相同的版本文件就是当前版本；比对出错时按当前版本处理，宁可不删
-		isActive = func(p string) bool {
-			same, err := sameContent(p, link)
-			return err != nil || same
-		}
-	} else {
+	// 复制品入口没有需要保留的当前版本，只保留最高版本
+	isActive := func(string) bool { return false }
+	if !copied {
 		active, err := filepath.EvalSymlinks(link)
 		if err != nil {
 			s.errItem(link, r.Agent, err)
@@ -210,17 +206,17 @@ func (s *scanner) scanVersions(r versionRule, progress func(string)) {
 			newest = i
 		}
 	}
-	if !found {
-		if copied {
-			s.reviewCopies(root, r, "入口与各版本文件内容都不同，无法确认当前版本")
-		} else {
-			review("无法确认当前版本，不自动判断旧版")
-		}
+	if !found && !copied {
+		review("无法确认当前版本，不自动判断旧版")
 		return
 	}
 	for i, e := range entries {
 		if !actives[i] && i != newest {
+			n := len(s.items)
 			s.add(e.path, root, r.Agent, CatOld, 0, ref{activeLink: link, copied: copied})
+			if copied && len(s.items) > n && s.items[n].Category == CatOld {
+				s.items[n].Note = "入口是独立副本，不依赖此文件；重装该版本时需重新下载"
+			}
 		}
 	}
 }
