@@ -222,8 +222,8 @@ func TestPlatformLayout(t *testing.T) {
 		}
 		return ""
 	})
-	if len(o.Channels) != 2 {
-		t.Fatalf("应同时覆盖稳定版与 Insiders，实际 %d", len(o.Channels))
+	if len(o.Channels) != len(editors) {
+		t.Fatalf("应覆盖全部编辑器，实际 %d", len(o.Channels))
 	}
 	stable := o.Channels[0]
 	if runtime.GOOS == "windows" {
@@ -366,4 +366,25 @@ func TestRootsIncludeServers(t *testing.T) {
 		}
 	}
 	t.Fatal("服务端目录必须计入清理前后的空间统计")
+}
+
+// 只勾选 VS Code 的条目时，Cursor 在运行不应阻止清理；勾选 Cursor 的条目时才阻止
+func TestCheckItemsOnlySelectedEditors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows 使用系统进程快照，不经过 Runner")
+	}
+	home := t.TempDir()
+	code := Channel{Name: "Code", AppRoot: filepath.Join(home, "Code"), ProcNames: []string{"Code"}}
+	cursor := Channel{Name: "Cursor", AppRoot: filepath.Join(home, "Cursor"), ProcNames: []string{"Cursor"}}
+	s := &Source{
+		Opts:   Options{Home: home, Channels: []Channel{code, cursor}},
+		Runner: fakeRunner{out: "42 0.0 0:01.00 0:10 100 S /Applications/Cursor.app/Contents/MacOS/Cursor\n"},
+	}
+	if n := s.CheckItems([]cleanup.Item{{Path: filepath.Join(code.AppRoot, "Cache")}}); n != nil {
+		t.Fatalf("只清理 VS Code 时不应要求退出 Cursor：%+v", n)
+	}
+	n := s.CheckItems([]cleanup.Item{{Path: filepath.Join(cursor.AppRoot, "Cache")}})
+	if n == nil || !n.Blocking || !strings.Contains(n.Title, "Cursor") {
+		t.Fatalf("清理 Cursor 时应阻止并在标题中说明：%+v", n)
+	}
 }

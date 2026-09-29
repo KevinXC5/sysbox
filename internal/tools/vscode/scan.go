@@ -1,5 +1,5 @@
-// Package vscode 清理 VS Code 与 Insiders 的可重建缓存、确定落后的扩展二进制，
-// 以及能用产品版本确认的旧 CLI / server。设置和未知目录默认保留，可手动勾选。
+// Package vscode 清理 VS Code、Insiders 以及 Cursor、Windsurf、Trae 等同源编辑器的可重建缓存、
+// 确定落后的扩展二进制，以及能用产品版本确认的旧 CLI / server。设置和未知目录默认保留，可手动勾选。
 package vscode
 
 import (
@@ -25,7 +25,7 @@ var categories = []cleanup.Category{
 	CatSkip:  {Label: "跳过", Sub: "需确认或无法确认", Tone: cleanup.ToneWarn},
 }
 
-// Channel 一个产品通道：稳定版或 Insiders。两者规则相同，目录名不同。
+// Channel 一个编辑器或产品通道，如稳定版、Insiders、Cursor。规则相同，目录名不同。
 type Channel struct {
 	Name      string
 	AppRoot   string
@@ -42,8 +42,8 @@ type Options struct {
 	Channels []Channel
 }
 
-// ErrNoData 两个通道的应用数据都不存在
-var ErrNoData = errors.New("找不到 VS Code 数据目录")
+// ErrNoData 所有编辑器的数据目录都不存在
+var ErrNoData = errors.New("找不到 VS Code、Cursor 等编辑器的数据目录")
 
 // DefaultOptions 返回当前平台的默认路径
 func DefaultOptions() (Options, error) {

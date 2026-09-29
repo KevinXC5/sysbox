@@ -4,33 +4,29 @@ package vscode
 
 import "path/filepath"
 
-// platformOptions macOS：稳定版与 Insiders 的应用数据在 ~/Library/Application Support，
-// 扩展与 CLI 在家目录的 .vscode / .vscode-insiders。
+// platformOptions macOS：应用数据在 ~/Library/Application Support/<编辑器>，
+// 扩展与 CLI 在家目录的 .vscode、.cursor 等目录。
 func platformOptions(home string, _ func(string) string) Options {
 	support := filepath.Join(home, "Library", "Application Support")
-	return Options{
-		Home: home,
-		Channels: []Channel{
-			{
-				Name:      "Code",
-				AppRoot:   resolve(filepath.Join(support, "Code")),
-				ExtRoot:   resolve(filepath.Join(home, ".vscode", "extensions")),
-				CLIRoots:  cliRoots(home, ".vscode", ".vscode-server"),
-				ProcNames: []string{"Code", "Code Helper", "Code Helper (Plugin)", "Code Helper (Renderer)", "Code Helper (GPU)"},
-				AppLabel:  "Application Support/Code",
-				ExtLabel:  ".vscode/extensions",
-			},
-			{
-				Name:      "Code - Insiders",
-				AppRoot:   resolve(filepath.Join(support, "Code - Insiders")),
-				ExtRoot:   resolve(filepath.Join(home, ".vscode-insiders", "extensions")),
-				CLIRoots:  cliRoots(home, ".vscode-insiders", ".vscode-server-insiders"),
-				ProcNames: []string{"Code - Insiders", "Code - Insiders Helper", "Code - Insiders Helper (Plugin)", "Code - Insiders Helper (Renderer)", "Code - Insiders Helper (GPU)"},
-				AppLabel:  "Application Support/Code - Insiders",
-				ExtLabel:  ".vscode-insiders/extensions",
-			},
-		},
+	o := Options{Home: home}
+	for _, e := range editors {
+		o.Channels = append(o.Channels, Channel{
+			Name:      e.name,
+			AppRoot:   resolve(filepath.Join(support, e.app)),
+			ExtRoot:   resolve(filepath.Join(home, e.dot, "extensions")),
+			CLIRoots:  cliRoots(home, e.dot, e.server),
+			ProcNames: procNames(e.app),
+			AppLabel:  "Application Support/" + e.app,
+			ExtLabel:  e.dot + "/extensions",
+		})
 	}
+	return o
+}
+
+// procNames 主进程与各类 helper 进程
+func procNames(app string) []string {
+	h := app + " Helper"
+	return []string{app, h, h + " (Plugin)", h + " (Renderer)", h + " (GPU)"}
 }
 
 // cliRoots 本机 CLI 与远程 server 的安装根。目录不存在时扫描阶段跳过。

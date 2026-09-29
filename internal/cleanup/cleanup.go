@@ -70,3 +70,9 @@ type Source interface {
 	// Tip 完成页底部的提示
 	Tip() string
 }
+
+// ItemChecker 可选接口：按本次勾选的条目做删除前检查。
+// 实现后界面用它代替 Check，只提示与所选条目相关的程序。
+type ItemChecker interface {
+	CheckItems(items []Item) *Notice
+}

@@ -4,7 +4,7 @@ package vscode
 
 import "path/filepath"
 
-// platformOptions Windows：应用数据在 %APPDATA%，扩展与 CLI 在 %USERPROFILE%\.vscode。
+// platformOptions Windows：应用数据在 %APPDATA%\<编辑器>，扩展与 CLI 在 %USERPROFILE%\.vscode 等目录。
 // 环境变量为空时回退到家目录，测试可注入，不读取本机真实目录。
 func platformOptions(home string, lookup func(string) string) Options {
 	roaming := lookup("APPDATA")
@@ -15,29 +15,19 @@ func platformOptions(home string, lookup func(string) string) Options {
 	if user == "" {
 		user = home
 	}
-	return Options{
-		Home: home,
-		Channels: []Channel{
-			{
-				Name:      "Code",
-				AppRoot:   resolve(filepath.Join(roaming, "Code")),
-				ExtRoot:   resolve(filepath.Join(user, ".vscode", "extensions")),
-				CLIRoots:  cliRoots(user, ".vscode", ".vscode-server"),
-				ProcNames: []string{"Code", "Code Helper"},
-				AppLabel:  "Roaming\\Code",
-				ExtLabel:  ".vscode\\extensions",
-			},
-			{
-				Name:      "Code - Insiders",
-				AppRoot:   resolve(filepath.Join(roaming, "Code - Insiders")),
-				ExtRoot:   resolve(filepath.Join(user, ".vscode-insiders", "extensions")),
-				CLIRoots:  cliRoots(user, ".vscode-insiders", ".vscode-server-insiders"),
-				ProcNames: []string{"Code - Insiders", "Code - Insiders Helper"},
-				AppLabel:  "Roaming\\Code - Insiders",
-				ExtLabel:  ".vscode-insiders\\extensions",
-			},
-		},
+	o := Options{Home: home}
+	for _, e := range editors {
+		o.Channels = append(o.Channels, Channel{
+			Name:      e.name,
+			AppRoot:   resolve(filepath.Join(roaming, e.app)),
+			ExtRoot:   resolve(filepath.Join(user, e.dot, "extensions")),
+			CLIRoots:  cliRoots(user, e.dot, e.server),
+			ProcNames: []string{e.app, e.app + " Helper"},
+			AppLabel:  "Roaming\\" + e.app,
+			ExtLabel:  e.dot + "\\extensions",
+		})
 	}
+	return o
 }
 
 func cliRoots(home, dot, server string) []string {

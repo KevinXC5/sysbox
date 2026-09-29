@@ -347,7 +347,18 @@ func (m *cleanPage) toggleAll(idxs []int) {
 func (m *cleanPage) check() tea.Cmd {
 	m.state = cleanChecking
 	src := m.src
-	return tea.Batch(m.spin.Tick, func() tea.Msg { return cleanCheckedMsg{src.Check()} })
+	var sel []cleanup.Item
+	for i, it := range m.items {
+		if m.selected[i] {
+			sel = append(sel, it)
+		}
+	}
+	return tea.Batch(m.spin.Tick, func() tea.Msg {
+		if ic, ok := src.(cleanup.ItemChecker); ok {
+			return cleanCheckedMsg{ic.CheckItems(sel)}
+		}
+		return cleanCheckedMsg{src.Check()}
+	})
 }
 
 // ---------- 删除 ----------
