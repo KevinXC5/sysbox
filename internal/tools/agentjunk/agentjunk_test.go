@@ -313,3 +313,109 @@ func TestRemoveReviewBackup(t *testing.T) {
 		t.Fatal("当前入口不能被连带删除")
 	}
 }
+
+func TestGrokKeepsOnlyLinkedVersion(t *testing.T) {
+	prev := goos
+	goos = "darwin"
+	t.Cleanup(func() { goos = prev })
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// grok 指向 bin 下的新版本，agent 仍指向旧版本，downloads 里还有一份更老的下载
+	bin := filepath.Join(home, ".grok/bin")
+	write(t, filepath.Join(bin, "grok-1.0.41"))
+	write(t, filepath.Join(bin, "grok-1.0.44"))
+	write(t, filepath.Join(home, ".grok/downloads/grok-1.0.40-macos-aarch64"))
+	mustLink(t, "grok-1.0.44", filepath.Join(bin, "grok"))
+	mustLink(t, "grok-1.0.41", filepath.Join(bin, "agent"))
+	setAge(t, filepath.Join(home, ".grok"), 2)
+
+	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	got := scan(t, s)
+	olds := []string{".grok/bin/grok-1.0.41", ".grok/downloads/grok-1.0.40-macos-aarch64", ".grok/bin/agent"}
+	for _, rel := range olds {
+		it, ok := got[rel]
+		if !ok || it.Category != CatOld || !it.Selected {
+			t.Errorf("%s 应作为旧版本默认勾选，实际 %+v", rel, it)
+		}
+	}
+	for _, keep := range []string{".grok/bin/grok-1.0.44", ".grok/bin/grok"} {
+		if _, ok := got[keep]; ok {
+			t.Errorf("grok 当前版本和入口不应出现：%s", keep)
+		}
+	}
+
+	for _, rel := range olds {
+		if err := s.Remove(got[rel]); err != nil {
+			t.Fatalf("删除 %s 失败：%v", rel, err)
+		}
+		if _, err := os.Lstat(filepath.Join(home, rel)); !os.IsNotExist(err) {
+			t.Errorf("%s 应已删除", rel)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(bin, "grok")); err != nil {
+		t.Fatal("grok 入口应仍然可用")
+	}
+}
+
+func TestGrokRejectsActiveSwitch(t *testing.T) {
+	prev := goos
+	goos = "darwin"
+	t.Cleanup(func() { goos = prev })
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(home, ".grok/bin")
+	write(t, filepath.Join(bin, "grok-1.0.44"))
+	write(t, filepath.Join(home, ".grok/downloads/grok-1.0.45-macos-aarch64"))
+	mustLink(t, "grok-1.0.44", filepath.Join(bin, "grok"))
+	setAge(t, filepath.Join(home, ".grok"), 2)
+
+	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	v := scan(t, s)[".grok/downloads/grok-1.0.45-macos-aarch64"]
+	// 扫描后 grok 切换到了 downloads 里的待删版本
+	link := filepath.Join(bin, "grok")
+	_ = os.Remove(link)
+	mustLink(t, v.Path, link)
+	if err := s.Remove(v); err == nil {
+		t.Fatal("grok 切换到该版本后应拒绝删除")
+	}
+}
+
+func TestGrokExtraAgentLinks(t *testing.T) {
+	prev, prevSys := goos, grokSystemBin
+	goos = "darwin"
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	grokSystemBin = filepath.Join(home, "usr-local-bin")
+	t.Cleanup(func() { goos, grokSystemBin = prev, prevSys })
+
+	bin := filepath.Join(home, ".grok/bin")
+	write(t, filepath.Join(bin, "grok-1.0.44"))
+	mustLink(t, "grok-1.0.44", filepath.Join(bin, "grok"))
+	// ~/.local/bin/agent 指向 Grok（目标已不存在也算），系统目录的 agent 属于其他工具
+	mustLink(t, filepath.Join(bin, "grok-1.0.41"), filepath.Join(home, ".local/bin/agent"))
+	write(t, filepath.Join(home, "other/agent"))
+	mustLink(t, filepath.Join(home, "other/agent"), filepath.Join(grokSystemBin, "agent"))
+	setAge(t, home, 2)
+
+	s := &Source{Home: home, KeepDays: 30, Now: func() time.Time { return now }}
+	got := scan(t, s)
+	it, ok := got[".local/bin/agent"]
+	if !ok || it.Category != CatOld || !it.Selected {
+		t.Fatalf("指向 Grok 的 agent 链接应作为旧版本默认勾选，实际 %+v", it)
+	}
+	if _, ok := got["usr-local-bin/agent"]; ok {
+		t.Error("不指向 Grok 的 agent 链接不应出现")
+	}
+	if err := s.Remove(it); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(it.Path); !os.IsNotExist(err) {
+		t.Error("agent 链接应已删除")
+	}
+}

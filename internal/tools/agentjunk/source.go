@@ -56,6 +56,7 @@ func (s *Source) Scan(progress func(string)) ([]cleanup.Item, error) {
 	for _, r := range versionRules() {
 		sc.scanVersions(r, progress)
 	}
+	sc.scanGrok(progress)
 	sc.inspectBinaries(progress)
 	sort.SliceStable(sc.items, func(i, j int) bool { return sc.items[i].Path < sc.items[j].Path })
 	return sc.items, nil
@@ -105,8 +106,8 @@ func (r ref) stillSafe(item string, now time.Time) error {
 	if !plainDir(r.root) || !samePath(filepath.Dir(item), r.root) {
 		return errors.New("所在目录已改变")
 	}
-	if isSymlink(item) {
-		return errors.New("已变成符号链接")
+	if isSymlink(item) != r.link {
+		return errors.New("链接类型已改变")
 	}
 	id, err := identify(item)
 	if err != nil {
@@ -124,15 +125,17 @@ func (r ref) stillSafe(item string, now time.Time) error {
 		if err != nil {
 			return errors.New("当前版本链接异常")
 		}
-		if !samePath(filepath.Dir(active), r.root) || samePath(active, item) {
+		dirs := r.activeDirs
+		if len(dirs) == 0 {
+			dirs = []string{r.root}
+		}
+		if !inDirs(active, dirs) || samePath(active, item) {
 			return errors.New("当前版本已切换到该条目")
 		}
-		for _, o := range r.otherLinks {
-			t, err := filepath.EvalSymlinks(o)
-			if err != nil || !samePath(t, active) {
-				return errors.New("命令链接不一致")
-			}
-		}
+	}
+	// 命令链接只删链接本身，已核对过 inode 与当前版本，不看修改时间
+	if r.link {
+		return nil
 	}
 	_, latest, err := usage(item, r.activeLink != "")
 	if err != nil {
@@ -154,7 +157,7 @@ func (r ref) stillSafe(item string, now time.Time) error {
 func (s *Source) Notes() []string {
 	return []string{
 		fmt.Sprintf("默认只勾选 %d 天未修改的缓存；近期缓存、日志和旧版本可手动勾选", s.KeepDays),
-		"当前版本、最高版本、会话、凭据、插件和配置不在扫描范围内",
+		"当前版本、最高版本（Grok 只保留当前版本）、会话、凭据、插件和配置不在扫描范围内",
 		"指向外部的符号链接和检查失败的条目不能手动纳入",
 		"删除前逐项复核，目标有变化会自动跳过",
 	}

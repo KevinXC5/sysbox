@@ -113,3 +113,13 @@ func within(p, root string) bool {
 	}
 	return p == root || strings.HasPrefix(p, root+sep)
 }
+
+// inDirs 判断 p 是否直接位于 dirs 中的某个目录下
+func inDirs(p string, dirs []string) bool {
+	for _, d := range dirs {
+		if samePath(filepath.Dir(p), d) {
+			return true
+		}
+	}
+	return false
+}
