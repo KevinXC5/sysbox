@@ -99,9 +99,15 @@ func runTUI(start string, dryRun bool, themeFlag string) int {
 		return 1
 	}
 	if app.Restart() {
-		if exe, err := selfupdate.Executable(); err == nil {
-			// Unix 上 Exec 成功不会返回；Windows 上新进程已启动，当前进程直接退出
-			_ = selfupdate.Restart(exe, os.Args, os.Environ())
+		exe, err := selfupdate.Executable()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sysbox：更新已完成，但无法定位重启程序，请手动重新运行 sysbox：", err)
+			return 1
+		}
+		// Unix 上 Exec 成功不会返回；Windows 上等待新版本退出后才把终端交还给 shell。
+		if err := selfupdate.Restart(exe, os.Args, os.Environ()); err != nil {
+			fmt.Fprintln(os.Stderr, "sysbox：重启或运行新版本失败，请手动重新运行 sysbox：", err)
+			return 1
 		}
 	}
 	return 0
