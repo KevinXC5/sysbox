@@ -1,11 +1,19 @@
 # 常用开发命令
-.PHONY: build run dry test lint record install release clean
+.PHONY: build cross run dry test lint record install release clean
 
 LDFLAGS := -X github.com/KevinXC5/sysbox/internal/meta.Version=dev
 
 # 编译到 bin/sysbox
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/sysbox ./cmd/sysbox
+
+# 交叉编译全部支持的平台（macOS、Windows 的 amd64 与 arm64），与 CI 一致；不支持 Linux
+PLATFORMS := darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
+cross:
+	@for p in $(PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; echo "编译 $$os/$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -o /dev/null ./... || exit 1; \
+	done
 
 # 运行界面
 run: build
