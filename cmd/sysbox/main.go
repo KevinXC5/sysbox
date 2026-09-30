@@ -31,6 +31,7 @@ const usage = `sysbox —— 系统维护工具箱
   sysbox [选项] <工具>     直接打开某个工具，工具名见 sysbox list
   sysbox docker            管理 Docker 容器与镜像
   sysbox k8s               管理 Kubernetes 集群资源
+  sysbox processes         管理本机进程与端口
   sysbox update            升级到最新版本
   sysbox uninstall         卸载 sysbox，默认保留配置文件
       --purge              同时删除配置目录

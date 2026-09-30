@@ -32,6 +32,11 @@ func Groups() []screens.Group {
 // Tools 工具注册表：新增工具只需在这里登记一项
 func Tools() []screens.Tool {
 	return []screens.Tool{
+		{
+			ID: "processes", Group: "系统", Name: "进程管理", Icon: iconProcesses, Desc: "实时查看进程、端口与环境变量",
+			Detail: []string{"默认每 2 秒刷新 CPU、内存与端口，支持暂停和调整间隔", "按 CPU、内存、名称、PID、端口排序，搜索进程与端口", "查看父子进程、完整命令、网络连接与环境变量", "对比父子进程代理变量，支持多选结束与强制结束"},
+			New:    screens.NewProcesses,
+		},
 		cleanTool(screens.Tool{
 			ID: "jetbrains", Group: "清理", Name: "JetBrains 缓存", Icon: iconJetBrains, Desc: "索引、编译缓存与 IDE 日志",
 			Detail: jetbrainsDetail(runtime.GOOS),

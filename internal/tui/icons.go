@@ -49,6 +49,12 @@ var (
 
 // 工具图标
 var (
+	iconProcesses = []string{ // 进程占用柱形图
+		".c..b.",
+		".cY.b.",
+		".cYrb.",
+		"SSSSSS",
+	}
 	iconDocker = []string{ // 集装箱与鲸鱼
 		".bb.b.",
 		"bbbbbb",
