@@ -146,9 +146,10 @@ sysbox version         # 显示版本号
 
 从首页选择「项目构建产物」，或运行 `sysbox projects`。
 
-- 在项目目录下查找 node_modules、.next、target、build、.gradle、.dart_tool、.build、obj、bin、.venv 等构建产物。产物旁必须有对应的项目文件（如 package.json、Cargo.toml、pom.xml、build.gradle、*.csproj）才会列出。
+- 在项目目录下查找 node_modules、.next、target、build、dist、.gradle、.dart_tool、.build、obj、bin、.venv 等构建产物。产物旁必须有对应的项目文件（如 package.json、Cargo.toml、pom.xml、build.gradle、*.csproj）才会列出。
+- build、target、bin、obj 这类常见目录名还要有构建工具留下的特征才算产物，如 Gradle 的 classes、libs、tmp，Maven 的 classes、maven-status、jar 包，Cargo 的 CACHEDIR.TAG。前端的 build、dist 要求有网页资源，并由 git 确认已被忽略且没有受控文件；没装 git 或不在仓库里的不列出。
 - 项目的活跃时间取 `.git` 状态文件与浅层源码的最新修改时间。超过保留期未活动的项目默认勾选，近期项目可手动勾选。Python 虚拟环境默认不勾选。
-- 未配置 `projects.roots` 时，自动扫描家目录下的 Github、Projects、Developer、Code、src、workspace、repos、IdeaProjects 等常见目录。不跟随符号链接，不进入 Library、AppData 与隐藏目录。
+- 未配置 `projects.roots` 时扫描整个家目录。不跟随符号链接，不进入 Library、AppData、图片与影音目录、Scoop 与 Conda 安装目录、Go 模块缓存和隐藏目录。
 
 ### Agent 垃圾
 
@@ -182,7 +183,7 @@ sysbox version         # 显示版本号
 | `animation` | 进入和退出工具页的过渡动画：`on` 开启，`off` 关闭，默认 `on` |
 | `update.disable_check` | 关闭启动时的新版本检查 |
 | `agent.keep_days` | 缓存与日志的保留天数，默认 30 |
-| `projects.roots` | 扫描构建产物的项目目录，支持 `~` 开头；省略时自动查找常见目录 |
+| `projects.roots` | 扫描构建产物的项目目录，支持 `~` 开头；省略时扫描整个家目录 |
 | `projects.keep_days` | 项目多少天未活动算过期，默认 30 |
 | `claude.proxy` | 下载 Claude Code 使用的代理；代理不可用时自动直连。也可用环境变量 `PROXY_URL` 覆盖 |
 | `claude.direct` | 始终直连，等同于环境变量 `CLAUDE_NO_PROXY=1` |

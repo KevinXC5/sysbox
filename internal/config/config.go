@@ -31,7 +31,7 @@ type Agent struct {
 
 // Projects 项目构建产物清理
 type Projects struct {
-	Roots    []string `json:"roots,omitempty"`     // 扫描的项目根目录，支持 ~ 开头；为空时自动查找常见目录
+	Roots    []string `json:"roots,omitempty"`     // 扫描的项目根目录，支持 ~ 开头；为空时扫描整个家目录
 	KeepDays int      `json:"keep_days,omitempty"` // 项目多少天未活动算过期，默认 30
 }
 

@@ -33,14 +33,6 @@ var categories = []cleanup.Category{
 	CatSkip:   {Label: "跳过", Sub: "无法读取", Tone: cleanup.ToneMuted},
 }
 
-// defaultRoots 未配置时自动查找的项目目录，按家目录下的相对路径
-var defaultRoots = []string{
-	"Github", "GitHub", "github", "Projects", "projects", "Developer", "Code", "code",
-	"src", "workspace", "Workspace", "dev", "repos",
-	"IdeaProjects", "WebstormProjects", "PycharmProjects", "GolandProjects",
-	filepath.Join("source", "repos"),
-}
-
 // Source 项目构建产物清理数据源
 type Source struct {
 	Dirs     []string // 项目根目录，已展开为绝对路径
@@ -48,7 +40,7 @@ type Source struct {
 	Now      func() time.Time
 }
 
-// NewSource 按配置确定项目根目录；roots 为空时自动查找常见目录
+// NewSource 按配置确定项目根目录；roots 为空时扫描整个家目录
 func NewSource(roots []string, keepDays int) (*Source, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -67,15 +59,16 @@ func NewSource(roots []string, keepDays int) (*Source, error) {
 	return &Source{Dirs: rs, KeepDays: keepDays, Now: time.Now}, nil
 }
 
-// resolveRoots 展开 ~、解析链接并去重；家目录和不存在的目录不作为根
+// resolveRoots 展开 ~、解析链接并去重；不存在的目录不作为根。
+// 未配置时直接以家目录为根，项目放在哪里都能扫到；配置时只接受家目录下的具体目录，避免与整盘扫描重叠。
 func resolveRoots(home string, roots []string) []string {
-	auto := len(roots) == 0
-	if auto {
-		for _, r := range defaultRoots {
-			roots = append(roots, filepath.Join(home, r))
-		}
-	}
 	realHome, _ := filepath.EvalSymlinks(home)
+	if len(roots) == 0 {
+		if fi, err := os.Stat(realHome); err == nil && fi.IsDir() && realHome != filepath.Dir(realHome) {
+			return []string{realHome}
+		}
+		return nil
+	}
 	var out []string
 	var infos []os.FileInfo
 	for _, r := range roots {
@@ -90,7 +83,7 @@ func resolveRoots(home string, roots []string) []string {
 			continue
 		}
 		fi, err := os.Stat(real)
-		// 整个家目录太大，也会扫进系统目录，只接受它下面的具体目录
+		// 配置里写家目录没有意义（省略即整盘扫描），只接受它下面的具体目录
 		if err != nil || !fi.IsDir() || real == realHome || real == filepath.Dir(real) {
 			continue
 		}
@@ -191,6 +184,10 @@ func group(f found) string {
 	rel, err := filepath.Rel(f.root, f.project)
 	if err != nil || rel == "." {
 		return filepath.Base(f.root)
+	}
+	// 以家目录为根时，用户名前缀没有信息量，只显示相对路径
+	if fsx.PrettyPath(f.root) == "~" {
+		return filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(filepath.Join(filepath.Base(f.root), rel))
 }

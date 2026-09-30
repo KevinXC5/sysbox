@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	maxDepth      = 6    // 从项目根往下最多找几层
+	maxDepth      = 7    // 从扫描根往下最多找几层，家目录为根时要多留一层
 	activityDepth = 3    // 计算活跃时间时往下看几层源码
 	activityLimit = 3000 // 计算活跃时间最多看多少个条目
 )
@@ -63,7 +63,7 @@ func walkContext(ctx context.Context, root string, now time.Time) []found {
 				out = append(out, found{path: p, root: root, project: dir, rule: r, active: t})
 				continue
 			}
-			if skipDirs[name] || strings.HasPrefix(name, ".") || depth >= maxDepth {
+			if skipped(dir, name) || depth >= maxDepth {
 				continue
 			}
 			visit(filepath.Join(dir, name), depth+1)
