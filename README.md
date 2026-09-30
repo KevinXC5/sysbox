@@ -16,6 +16,7 @@
 | 清理 | 开发缓存 | 清理 Go、npm、pnpm、Yarn、Bun、pip、uv、Gradle、Maven、Cargo、Homebrew 的缓存；构建依赖默认不勾选 |
 | 清理 | 项目构建产物 | 查找长期未活动项目的 node_modules、target、build、.venv 等构建产物 |
 | 工具 | Claude Code 更新 | 断点续传下载指定版本，SHA-256 校验后调用官方安装 |
+| 设置 | 配置项 | 在首页直接修改主题、列表图标、界面动画、更新检查、清理保留天数、项目扫描目录与 Claude 下载代理，修改后立即保存 |
 
 所有会修改系统的操作都有确认弹窗；加上 `--dry-run` 可以完整走一遍流程而不做任何修改。首页按 `s` 可以一次扫描全部清理工具，列出各自可释放的空间与合计。
 
@@ -43,7 +44,7 @@ irm https://raw.githubusercontent.com/KevinXC5/sysbox/main/install.ps1 | iex
 
 - 界面每次启动时检查一次新版本，有更新时顶栏会提示，首页按 `u` 查看更新内容并升级、重启
 - 也可以在命令行执行 `sysbox update`，升级前会列出更新内容
-- 在配置文件中设置 `"update": {"disable_check": true}` 可关闭自动检查
+- 在首页「设置」中关闭「启动时检查更新」，或在配置文件中设置 `"update": {"disable_check": true}`，可关闭自动检查
 
 ## 卸载
 
@@ -70,9 +71,17 @@ sysbox update          # 升级到最新版本
 sysbox version         # 显示版本号
 ```
 
-通用按键：`↑↓` 移动，`enter` 确认，`esc` 返回，`t` 切换主题，`ctrl+c` 退出。首页按 `s` 扫描可释放空间，从工具返回首页时会重新统计该工具。各页面的其余按键显示在底栏。
+通用按键：`↑↓` 移动，`enter` 确认，`esc` 返回，`t` 切换主题，`ctrl+c` 退出。各页面的其余按键显示在底栏。
 
 主题默认跟随终端背景色自动选择深色或浅色，按 `t` 在 自动 → 浅色 → 深色 之间切换，选择会被记住。
+
+### 首页
+
+- 顶部是「清理」「工具」「系统」「设置」四个分类方块，用 `←→` 切换；下方列出当前分类的条目，用 `↑↓` 选择，右侧显示详情。「系统」暂无工具
+- 按 `s` 一次扫描全部清理工具，方块和列表显示各自可释放的空间，底栏显示合计；从工具返回首页时会重新统计该工具
+- 「设置」分类里的配置项按 `enter` 切换取值，扫描目录、代理地址等文字配置按 `enter` 编辑，修改后立即写入配置文件
+- 打开工具时分类方块向上收成顶部的分类条，返回首页时再展开；动画约 0.2～0.3 秒，可在「设置」中关闭
+- 图标用字符色块绘制，不依赖字体，需要终端支持真彩色；窗口达到约 50 行时显示大字 Logo
 
 ### VS Code 系编辑器
 
@@ -114,11 +123,13 @@ sysbox version         # 显示版本号
 
 ## 配置
 
-配置文件位于 `~/.config/sysbox/config.json`（遵循 `XDG_CONFIG_HOME`），Windows 上位于 `%APPDATA%\sysbox\config.json`。所有字段都可省略：
+首页「设置」分类可以直接修改下列配置，修改后立即写入配置文件。配置文件位于 `~/.config/sysbox/config.json`（遵循 `XDG_CONFIG_HOME`），Windows 上位于 `%APPDATA%\sysbox\config.json`。所有字段都可省略：
 
 ```json
 {
   "theme": "auto",
+  "icons": "show",
+  "animation": "on",
   "agent": { "keep_days": 30 },
   "projects": { "roots": ["~/Github"], "keep_days": 30 },
   "claude": { "proxy": "http://127.0.0.1:7890", "direct": false },
@@ -128,6 +139,10 @@ sysbox version         # 显示版本号
 
 | 字段 | 说明 |
 |---|---|
+| `theme` | 主题：`auto`、`light`、`dark`，默认 `auto` |
+| `icons` | 首页列表的像素图标：`show` 显示，`none` 关闭，默认 `show` |
+| `animation` | 进入和退出工具页的过渡动画：`on` 开启，`off` 关闭，默认 `on` |
+| `update.disable_check` | 关闭启动时的新版本检查 |
 | `agent.keep_days` | 缓存与日志的保留天数，默认 30 |
 | `projects.roots` | 扫描构建产物的项目目录，支持 `~` 开头；省略时自动查找常见目录 |
 | `projects.keep_days` | 项目多少天未活动算过期，默认 30 |
@@ -139,10 +154,11 @@ sysbox version         # 显示版本号
 | | |
 |---|---|
 | ![首页](docs/screenshots/dark/01-home.png) | ![首页一键扫描](docs/screenshots/dark/01-home-scan.png) |
-| ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) | ![确认弹窗](docs/screenshots/dark/03-jetbrains-confirm.png) |
-| ![清理完成](docs/screenshots/dark/04-jetbrains-done.png) | ![Agent 垃圾](docs/screenshots/dark/05-agent.png) |
+| ![JetBrains 缓存](docs/screenshots/dark/02-jetbrains.png) | ![确认弹窗](docs/screenshots/dark/03-devcache-confirm.png) |
+| ![清理完成](docs/screenshots/dark/04-devcache-done.png) | ![Agent 垃圾](docs/screenshots/dark/05-agent.png) |
 | ![VS Code 缓存](docs/screenshots/dark/06-vscode.png) | ![开发缓存](docs/screenshots/dark/07-devcache.png) |
 | ![项目构建产物](docs/screenshots/dark/08-projects.png) | ![Claude Code 更新](docs/screenshots/dark/10-claude.png) |
+| ![设置](docs/screenshots/dark/01-home-settings.png) | |
 
 浅色主题：
 

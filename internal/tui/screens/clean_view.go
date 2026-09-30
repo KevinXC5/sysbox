@@ -297,15 +297,17 @@ func (m *cleanPage) viewTabs(iw int) string {
 	return widget.Spread(iw, left, right)
 }
 
-// viewRows 当前分类的条目列表，带勾选状态和相对大小条；窄时依次省略所属列、大小条
+// viewRows 当前分类的条目列表，放在与首页一致的圆角面板里，带勾选状态和相对大小条；
+// 选中行整行铺底色并用左侧色条标出；窄时依次省略所属列、大小条
 func (m *cleanPage) viewRows(lw, h int) string {
 	idxs := m.tabItems()
+	iw, ih := lw-4, max(1, h-2)
 	if len(idxs) == 0 {
-		return widget.Center(lw, h, theme.MutedStyle.Render("此分类下没有条目"))
+		return box(lw, h, widget.Center(iw, ih, theme.MutedStyle.Render("此分类下没有条目")))
 	}
 	cat := m.curCat()
 	c := m.cursor[cat]
-	m.offset[cat] = widget.Scroll(c, m.offset[cat], len(idxs), h)
+	m.offset[cat] = widget.Scroll(c, m.offset[cat], len(idxs), ih)
 	off := m.offset[cat]
 
 	var maxSize int64 = 1
@@ -316,13 +318,13 @@ func (m *cleanPage) viewRows(lw, h int) string {
 
 	const sizeW = 9
 	groupW, barW := 18, 10
-	if lw < 70 {
+	if iw < 70 {
 		groupW = 0
 	}
-	if lw < 50 {
+	if iw < 50 {
 		barW = 0
 	}
-	nameW := lw - 4 - sizeW - 1 // 4 列留给光标和勾选，1 列是大小前的空格
+	nameW := iw - 4 - sizeW - 2 // 4 列留给光标和勾选，大小前后各 1 列
 	if groupW > 0 {
 		nameW -= groupW + 1
 	}
@@ -331,21 +333,23 @@ func (m *cleanPage) viewRows(lw, h int) string {
 	}
 
 	var rows []string
-	for r := off; r < min(len(idxs), off+h); r++ {
+	for r := off; r < min(len(idxs), off+ih); r++ {
 		i := idxs[r]
 		it := m.items[i]
 		cur := r == c
 
+		bg := lipgloss.NewStyle()
 		mark := "  "
 		if cur {
-			mark = theme.Fg(theme.Accent).Render("▌ ")
+			bg = bg.Background(theme.Surface)
+			mark = theme.Fg(theme.Accent).Inherit(bg).Render("▌ ")
 		}
-		check := theme.FaintStyle.Render("· ")
+		check := theme.FaintStyle.Inherit(bg).Render("· ")
 		if it.Selectable {
 			if m.selected[i] {
-				check = theme.Fg(color).Render("◉ ")
+				check = theme.Fg(color).Inherit(bg).Render("◉ ")
 			} else {
-				check = theme.MutedStyle.Render("○ ")
+				check = theme.MutedStyle.Inherit(bg).Render("○ ")
 			}
 		}
 		nameStyle, sizeStyle := theme.TextStyle, theme.SubtleStyle
@@ -355,22 +359,23 @@ func (m *cleanPage) viewRows(lw, h int) string {
 		if cur {
 			nameStyle, sizeStyle = theme.Fg(theme.Accent).Bold(true), theme.BoldStyle
 		}
+		sp := bg.Render(" ")
 
-		row := mark + check + widget.Cell(it.Name, nameW, nameStyle, false)
+		row := mark + check + cell(it.Name, nameW, nameStyle.Inherit(bg), false)
 		if groupW > 0 {
-			row += " " + widget.Cell(it.Group, groupW, theme.MutedStyle, false)
+			row += sp + cell(it.Group, groupW, theme.MutedStyle.Inherit(bg), false)
 		}
 		if barW > 0 {
 			filled := int(float64(it.Size) / float64(maxSize) * float64(barW))
 			if it.Size > 0 && filled == 0 {
 				filled = 1
 			}
-			row += " " + theme.Fg(color).Render(strings.Repeat("━", filled)) +
-				theme.FaintStyle.Render(strings.Repeat("━", barW-filled))
+			row += sp + theme.Fg(color).Inherit(bg).Render(strings.Repeat("━", filled)) +
+				theme.FaintStyle.Inherit(bg).Render(strings.Repeat("━", barW-filled))
 		}
-		rows = append(rows, row+" "+widget.Cell(fsx.FormatBytes(it.Size), sizeW, sizeStyle, true))
+		rows = append(rows, row+sp+cell(fsx.FormatBytes(it.Size), sizeW, sizeStyle.Inherit(bg), true)+sp)
 	}
-	return lipgloss.NewStyle().Width(lw).Height(h).Render(strings.Join(rows, "\n"))
+	return box(lw, h, strings.Join(rows, "\n"))
 }
 
 // viewDetail 右侧详情面板，展示当前条目的完整信息
@@ -388,7 +393,7 @@ func (m *cleanPage) viewDetail(dw, h int) string {
 	}
 	wrap := func(s string, st lipgloss.Style) string { return st.Width(inner).Render(s) }
 	lines := []string{
-		theme.BoldStyle.Render(it.Name),
+		theme.Fg(theme.Accent).Bold(true).Render(it.Name),
 		theme.Badge(m.cats[it.Category].Label, m.color(it.Category)) + "  " + theme.SubtleStyle.Render(kind),
 		"",
 		widget.KV("大小", 6, sizeText(it)),

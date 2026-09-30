@@ -6,7 +6,7 @@
 make build    # 编译到 bin/sysbox
 make dry      # 演练模式运行
 make test     # 格式检查、静态检查与测试
-make record   # 重新录制截图，依赖 vhs 与 Maple Mono NF CN 字体
+make record   # 重新录制截图，终端 197 × 58，依赖 vhs 与 Maple Mono NF CN 字体
 ```
 
 ### 目录结构
@@ -24,11 +24,12 @@ internal/
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
     jetbrains/  vscode/  agentjunk/  devcache/  projects/  claudeupdate/
   ui/
-    theme/           配色（浅色、深色两套）、渐变、Logo
+    theme/           配色（浅色、深色两套）、渐变、Logo、像素图标渲染
     widget/          顶栏、底栏、面板、弹窗、进度条等组件
   tui/
     app.go           根模型：路由、全局按键、顶栏底栏
-    registry.go      工具注册表
+    registry.go      注册表：首页分类、工具与设置项
+    icons.go         首页的彩色像素图标
     screens/         页面：首页、通用清理页及各工具页
 scripts/record.sh    录制 README 截图
 install.sh           macOS 安装脚本
@@ -41,7 +42,8 @@ install.ps1          Windows 安装脚本
 - 演练模式由各工具根据 `screens.Env.DryRun` 自行处理，只走流程不做修改
 - 清理类工具实现 `cleanup.Source` 接口，在注册表中用 `cleanTool` 登记，复用 `screens.NewClean`，并自动加入首页的可释放空间汇总
 - 删除前检查只需关心所选条目时，额外实现 `cleanup.ItemChecker`
-- 新增工具：实现领域逻辑与页面，在 `internal/tui/registry.go` 登记一项即可
+- 新增工具：实现领域逻辑与页面，在 `internal/tui/registry.go` 登记一项即可；`Group` 决定放在首页哪个分类，`Icon` 是 6×4 的像素图标，画在 `internal/tui/icons.go`
+- 新增设置项：在 `Settings()` 中登记，选项型填 `Options`，文字型留空并在 `Set` 中校验输入
 
 ### 发布
 

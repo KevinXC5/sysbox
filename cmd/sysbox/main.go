@@ -94,7 +94,7 @@ func runTUI(start string, dryRun bool, themeFlag string) int {
 	theme.Setup(mode)
 
 	app := tui.New(screens.Env{DryRun: dryRun, Config: cfg}, start)
-	if _, err := tea.NewProgram(app, tea.WithAltScreen()).Run(); err != nil {
+	if _, err := tea.NewProgram(app, tea.WithAltScreen(), tea.WithFPS(tui.FPS)).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "sysbox：", err)
 		return 1
 	}

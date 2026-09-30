@@ -2,10 +2,11 @@
 # 录制 README 用的截图，依赖 vhs（brew install vhs）与 Maple Mono NF CN 字体。
 # 用法：scripts/record.sh [dark|light]...   默认两种主题都录
 # 全程使用 --dry-run 演练模式和独立的演示配置，不会修改系统，也不会读写真实配置。
+# 录制终端为 197 列 × 58 行，与常用的全屏终端一致，首页能显示大字 Logo 与完整的分类方块。
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# vhs 会把当前环境传给录制终端，NO_COLOR 或 TERM=dumb 会让截图失去颜色
-unset NO_COLOR
+# vhs 会把当前环境传给录制终端，NO_COLOR、CLICOLOR=0、FORCE_COLOR=0 或 TERM=dumb 都会让截图失去颜色
+unset NO_COLOR CLICOLOR FORCE_COLOR
 export TERM=xterm-256color
 
 go build -o bin/sysbox ./cmd/sysbox
@@ -57,8 +58,8 @@ Output "/tmp/sysbox-demo/$THEME.gif"
 Set Shell zsh
 Set FontSize 15
 Set FontFamily "Maple Mono NF CN"
-Set Width 1560
-Set Height 1000
+Set Width 2110
+Set Height 1600
 Set LineHeight 1.25
 Set Padding 22
 Set Margin 32
@@ -72,9 +73,12 @@ EOF
     shot 01-home "" 1.5s
     # 首页按 s 扫描全部清理工具，等所有工具统计完再截
     shot 01-home-scan "" 1.5s s Sleep
+    # 首页向左切换到最后一个分类「设置」
+    shot 01-home-settings "" 1.5s Left
     shot 02-jetbrains jetbrains 2.5s Down Down
-    shot 03-jetbrains-confirm jetbrains 2.5s Enter Right
-    shot 04-jetbrains-done jetbrains 2.5s Enter Right Enter Sleep
+    # 确认与完成页需要有默认勾选的条目，开发缓存最常有；它只提示运行中的工具，不会阻止删除
+    shot 03-devcache-confirm devcache 3s Enter Right
+    shot 04-devcache-done devcache 3s Enter Right Enter Sleep
     shot 05-agent agent 3s
     shot 06-vscode vscode 3s
     shot 07-devcache devcache 3s

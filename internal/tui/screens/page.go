@@ -38,12 +38,48 @@ type Tool struct {
 	ID     string
 	Group  string
 	Name   string
+	Icon   []string // 6×4 的彩色像素图标
 	Desc   string   // 列表里的一句话简介
 	Detail []string // 详情面板里的功能要点
 	New    func(Env) Page
 	// Source 清理类工具的数据源，首页用它汇总可释放空间；非清理工具为 nil
 	Source func(Env) (cleanup.Source, error)
 }
+
+// Group 首页的一个分类方块
+type Group struct {
+	Name string
+	Icon []string // 12×8 的彩色像素图标，字母含义见 theme.PixelArt
+}
+
+// Setting 首页“设置”分类里的一项配置
+type Setting struct {
+	ID     string
+	Group  string
+	Name   string
+	Desc   string
+	Icon   []string // 6×4 的彩色像素图标
+	Detail []string // 详情面板里的说明
+	// Options 可选的原始值，按 enter 依次切换；为空时按 enter 编辑文字
+	Options []string
+	// Get 当前的原始值
+	Get func(Env) string
+	// Label 原始值的显示文字，为 nil 时原样显示
+	Label func(string) string
+	// Set 把原始值写入配置，值不合法时返回错误
+	Set func(*config.Config, string) error
+}
+
+// Show 原始值的显示文字
+func (s Setting) Show(v string) string {
+	if s.Label != nil {
+		return s.Label(v)
+	}
+	return v
+}
+
+// ConfigMsg 首页修改了配置，由根模型更新运行中的配置并写回配置文件
+type ConfigMsg struct{ Edit func(*config.Config) }
 
 // BackMsg 返回首页
 type BackMsg struct{}

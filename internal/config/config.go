@@ -15,11 +15,13 @@ import (
 
 // Config 用户配置
 type Config struct {
-	Theme    string   `json:"theme,omitempty"` // auto / light / dark
-	Agent    Agent    `json:"agent"`
-	Projects Projects `json:"projects"`
-	Claude   Claude   `json:"claude"`
-	Update   Update   `json:"update"`
+	Theme     string   `json:"theme,omitempty"`     // auto / light / dark
+	Icons     string   `json:"icons,omitempty"`     // show / none，首页列表的像素图标，默认 show
+	Animation string   `json:"animation,omitempty"` // on / off，进入和退出工具页的动画，默认 on
+	Agent     Agent    `json:"agent"`
+	Projects  Projects `json:"projects"`
+	Claude    Claude   `json:"claude"`
+	Update    Update   `json:"update"`
 }
 
 // Agent agent 垃圾清理
