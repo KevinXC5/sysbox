@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/KevinXC5/sysbox/internal/cleanup"
+	"github.com/KevinXC5/sysbox/internal/fsx"
 )
 
 // 复现：大小统计在后台按扫描顺序回填，界面却先按分类和大小重排了条目。
@@ -17,8 +18,8 @@ func TestMeasuredSizeFollowsItemAfterSort(t *testing.T) {
 	p := NewClean(src, Env{}).(*cleanPage)
 	p.Update(cleanScannedMsg{src.items})
 	// 大的那项先统计完，下标是扫描时的 1
-	p.Update(cleanMeasuredMsg{idx: 1, size: 900})
-	p.Update(cleanMeasuredMsg{idx: 0, size: 100})
+	p.Update(cleanMeasuredMsg{idx: 1, usage: fsx.Usage{Bytes: 900}})
+	p.Update(cleanMeasuredMsg{idx: 0, usage: fsx.Usage{Bytes: 100}})
 	p.Update(cleanScanDone{})
 
 	if p.items[0].Name != "large" || p.items[0].Size != 900 {

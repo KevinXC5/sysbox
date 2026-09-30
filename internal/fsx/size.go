@@ -2,6 +2,7 @@
 package fsx
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,22 +10,36 @@ import (
 	"strings"
 )
 
-// DiskUsage 统计路径实际占用的磁盘空间（字节），口径与 du 一致。
-// 不跟随符号链接；遇到无权限等错误时跳过该条目，不中断统计。
-func DiskUsage(path string) int64 {
-	var total int64
+// Usage 一次磁盘占用统计的结果
+type Usage struct {
+	Bytes   int64
+	Skipped int // 因无权限等错误跳过的条目数，非零时 Bytes 可能偏小
+}
+
+// Partial 统计是否不完整
+func (u Usage) Partial() bool { return u.Skipped > 0 }
+
+// DiskUsageContext 统计路径实际占用的磁盘空间，口径与 du 一致。
+// 不跟随符号链接；遇到无权限等错误时跳过该条目并计数，不中断统计；取消后立即停止遍历。
+func DiskUsageContext(ctx context.Context, path string) Usage {
+	var u Usage
 	_ = filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
+		if ctx.Err() != nil {
+			return filepath.SkipAll
+		}
 		if err != nil {
+			u.Skipped++
 			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
+			u.Skipped++
 			return nil
 		}
-		total += AllocSize(info)
+		u.Bytes += AllocSize(info)
 		return nil
 	})
-	return total
+	return u
 }
 
 // 大小单位，按 1024 进制

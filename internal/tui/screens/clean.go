@@ -36,8 +36,8 @@ type (
 	cleanStageMsg    struct{ stage string }
 	cleanScannedMsg  struct{ items []cleanup.Item }
 	cleanMeasuredMsg struct {
-		idx  int
-		size int64
+		idx   int
+		usage fsx.Usage
 	}
 	cleanRootsMsg   struct{ sizes []int64 }
 	cleanFailedMsg  struct{ err error }
@@ -162,7 +162,7 @@ func (m *cleanPage) scan(ctx context.Context, ch chan<- tea.Msg) {
 	}
 	if len(todo) > 0 {
 		send(cleanStageMsg{"统计占用空间"})
-		fsx.MeasureAllContext(ctx, paths, 8, func(i int, size int64) { send(cleanMeasuredMsg{todo[i], size}) })
+		fsx.MeasureAllContext(ctx, paths, 8, func(i int, u fsx.Usage) { send(cleanMeasuredMsg{todo[i], u}) })
 	}
 	if ctx.Err() == nil {
 		send(cleanRootsMsg{m.measureRoots(ctx, false)})
@@ -186,7 +186,7 @@ func (m *cleanPage) measureRoots(ctx context.Context, after bool) []int64 {
 		indices = append(indices, i)
 		paths = append(paths, r.Path)
 	}
-	fsx.MeasureAllContext(ctx, paths, 8, func(i int, size int64) { sizes[indices[i]] = size })
+	fsx.MeasureAllContext(ctx, paths, 8, func(i int, u fsx.Usage) { sizes[indices[i]] = u.Bytes })
 	return sizes
 }
 
@@ -229,7 +229,8 @@ func (m *cleanPage) Update(msg tea.Msg) tea.Cmd {
 		}
 		return m.wait()
 	case cleanMeasuredMsg:
-		m.items[msg.idx].Size = msg.size
+		m.items[msg.idx].Size = msg.usage.Bytes
+		m.items[msg.idx].Partial = msg.usage.Partial()
 		m.measured[msg.idx] = true
 		return m.wait()
 	case cleanRootsMsg:
@@ -541,6 +542,17 @@ func (m *cleanPage) catStats(cat int) (n int, size int64, selN int, selSize int6
 		}
 	}
 	return
+}
+
+// partialCount 大小统计不完整的条目数
+func (m *cleanPage) partialCount() int {
+	n := 0
+	for _, it := range m.items {
+		if it.Partial {
+			n++
+		}
+	}
+	return n
 }
 
 // selectedIrreversible 是否勾选了删除后无法恢复的条目

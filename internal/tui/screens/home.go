@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"context"
 	"slices"
 	"strconv"
 	"strings"
@@ -54,7 +55,8 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 		m.info = sysInfo(msg)
 	case homeSumMsg:
 		if sum := m.sums[msg.id]; sum != nil && sum.gen == msg.gen {
-			*sum = toolSum{gen: msg.gen, done: true, n: msg.n, size: msg.size}
+			sum.cancel()
+			*sum = toolSum{gen: msg.gen, done: true, n: msg.n, size: msg.size, partial: msg.partial}
 			if msg.err != nil {
 				sum.failure = msg.err.Error()
 			}
@@ -74,7 +76,12 @@ func (m *Home) Update(msg tea.Msg) tea.Cmd {
 				return Open(SelfUpdateID)
 			}
 		case "enter", " ":
-			return Open(m.tools[m.cursor].ID)
+			id := m.tools[m.cursor].ID
+			// 工具页会重新扫描同一批目录，停掉首页的这次扫描，返回首页时再重扫
+			if sum := m.sums[id]; sum != nil && !sum.done {
+				sum.cancel()
+			}
+			return Open(id)
 		}
 	}
 	return nil
@@ -92,8 +99,7 @@ func (m *Home) scanAll() tea.Cmd {
 	var cmds []tea.Cmd
 	for _, t := range m.tools {
 		if t.Source != nil {
-			m.sums[t.ID] = &toolSum{gen: m.gen}
-			cmds = append(cmds, scanTool(t, m.env, m.gen))
+			cmds = append(cmds, m.startScan(t))
 		}
 	}
 	return tea.Batch(cmds...)
@@ -101,28 +107,38 @@ func (m *Home) scanAll() tea.Cmd {
 
 // Refresh 从工具页返回后重扫该工具；还没扫描过时什么也不做
 func (m *Home) Refresh(id string) tea.Cmd {
-	if m.sums[id] == nil || !m.sums[id].done {
+	if m.sums[id] == nil {
 		return nil
 	}
 	m.gen++
 	for _, t := range m.tools {
 		if t.ID == id && t.Source != nil {
-			m.sums[id] = &toolSum{gen: m.gen}
-			return scanTool(t, m.env, m.gen)
+			return m.startScan(t)
 		}
 	}
 	return nil
 }
 
-// total 已完成扫描的工具数和可释放总量
-func (m *Home) total() (done int, size int64) {
+// startScan 开始扫描一个工具，替换并取消该工具尚未完成的旧扫描
+func (m *Home) startScan(t Tool) tea.Cmd {
+	if old := m.sums[t.ID]; old != nil {
+		old.cancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.sums[t.ID] = &toolSum{gen: m.gen, cancel: cancel}
+	return scanTool(ctx, t, m.env, m.gen)
+}
+
+// total 已完成扫描的工具数和可释放总量；partial 表示总量可能偏小
+func (m *Home) total() (done int, size int64, partial bool) {
 	for _, s := range m.sums {
 		if s.done {
 			done++
 			size += s.size
+			partial = partial || s.partial
 		}
 	}
-	return done, size
+	return done, size, partial
 }
 
 func (m *Home) Crumbs() []string { return nil }
@@ -143,11 +159,15 @@ func (m *Home) Status() string {
 	if m.sums == nil {
 		return tools
 	}
-	done, size := m.total()
+	done, size, partial := m.total()
 	if done < len(m.sums) {
 		return theme.SubtleStyle.Render("正在扫描 "+strconv.Itoa(done)+"/"+strconv.Itoa(len(m.sums))) + theme.MutedStyle.Render(" · ") + tools
 	}
-	return theme.Fg(theme.Accent).Render("共可释放 "+fsx.FormatBytes(size)) + theme.MutedStyle.Render(" · ") + tools
+	prefix := "共可释放 "
+	if partial {
+		prefix = "共可释放 ≥ "
+	}
+	return theme.Fg(theme.Accent).Render(prefix+fsx.FormatBytes(size)) + theme.MutedStyle.Render(" · ") + tools
 }
 
 func (m *Home) Body(w, h int) string {
@@ -234,6 +254,8 @@ func sumText(sum *toolSum) (string, lipgloss.Style) {
 		return "不可用", theme.MutedStyle
 	case sum.n == 0:
 		return "无需清理", theme.MutedStyle
+	case sum.partial:
+		return "可释放 ≥ " + fsx.FormatBytes(sum.size), theme.Fg(theme.Green)
 	}
 	return "可释放 " + fsx.FormatBytes(sum.size), theme.Fg(theme.Green)
 }
@@ -254,6 +276,9 @@ func (m *Home) detail(w, h int) string {
 			text = sum.failure
 		case sum.done && sum.n > 0:
 			text += " · 默认勾选 " + strconv.Itoa(sum.n) + " 项"
+			if sum.partial {
+				text += " · 部分目录无法读取"
+			}
 		}
 		lines = append(lines, widget.Section("扫描结果"), style.Width(inner).Render(text), "")
 	}

@@ -51,7 +51,11 @@ func (m *cleanPage) Hints() []string {
 func (m *cleanPage) Status() string {
 	switch m.state {
 	case cleanList:
-		return theme.Fg(theme.Accent).Render(fmt.Sprintf("已选 %d 项 · %s", m.selCount(), fsx.FormatBytes(m.selBytes())))
+		s := theme.Fg(theme.Accent).Render(fmt.Sprintf("已选 %d 项 · %s", m.selCount(), fsx.FormatBytes(m.selBytes())))
+		if n := m.partialCount(); n > 0 {
+			s += theme.MutedStyle.Render(" · ") + theme.Fg(theme.Amber).Render(fmt.Sprintf("%d 项统计不完整", n))
+		}
+		return s
 	case cleanChecking:
 		return m.spin.View() + " " + theme.SubtleStyle.Render("正在检查…")
 	}
@@ -387,7 +391,7 @@ func (m *cleanPage) viewDetail(dw, h int) string {
 		theme.BoldStyle.Render(it.Name),
 		theme.Badge(m.cats[it.Category].Label, m.color(it.Category)) + "  " + theme.SubtleStyle.Render(kind),
 		"",
-		widget.KV("大小", 6, theme.BoldStyle.Render(fsx.FormatBytes(it.Size))),
+		widget.KV("大小", 6, sizeText(it)),
 		widget.KV("所属", 6, theme.TextStyle.Render(it.Group)),
 		"",
 		widget.Section("位置"),
@@ -399,6 +403,15 @@ func (m *cleanPage) viewDetail(dw, h int) string {
 		wrap(m.detailStatus(i), lipgloss.NewStyle()),
 	}
 	return widget.Panel(dw, h, theme.Faint, strings.Join(lines, "\n"))
+}
+
+// sizeText 详情里的大小；统计不完整时注明，避免把偏小的结果当成完整统计
+func sizeText(it cleanup.Item) string {
+	s := theme.BoldStyle.Render(fsx.FormatBytes(it.Size))
+	if it.Partial {
+		s += theme.Fg(theme.Amber).Render(" · 部分目录无法读取")
+	}
+	return s
 }
 
 // detailStatus 当前条目将如何处理

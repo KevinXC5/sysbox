@@ -5,8 +5,9 @@ import (
 	"sync"
 )
 
-// MeasureAllContext 停止派发取消后的任务；已经开始的单次 DiskUsage 会自然结束。
-func MeasureAllContext(ctx context.Context, paths []string, workers int, done func(int, int64)) {
+// MeasureAllContext 并发统计多个路径的磁盘占用，每完成一项回调一次；取消后不再回调。
+// 回调可能来自多个 goroutine，调用方需自行保证并发安全。
+func MeasureAllContext(ctx context.Context, paths []string, workers int, done func(i int, u Usage)) {
 	workers = min(len(paths), max(1, workers))
 	var wg sync.WaitGroup
 	jobs := make(chan int)
@@ -18,9 +19,9 @@ func MeasureAllContext(ctx context.Context, paths []string, workers int, done fu
 				if ctx.Err() != nil {
 					continue
 				}
-				size := DiskUsage(paths[i])
+				u := DiskUsageContext(ctx, paths[i])
 				if ctx.Err() == nil {
-					done(i, size)
+					done(i, u)
 				}
 			}
 		}()
@@ -35,10 +36,4 @@ dispatch:
 	}
 	close(jobs)
 	wg.Wait()
-}
-
-// MeasureAll 并发统计多个路径的磁盘占用，每完成一项回调一次。
-// 回调可能来自多个 goroutine，调用方需自行保证并发安全。
-func MeasureAll(paths []string, workers int, done func(i int, size int64)) {
-	MeasureAllContext(context.Background(), paths, workers, done)
 }

@@ -41,6 +41,7 @@ type Item struct {
 	Irreversible bool // 删除后无法恢复，确认时额外警示
 	Size         int64
 	Sized        bool // 扫描时已统计大小，界面无需再统计
+	Partial      bool // 统计大小时有子项无法读取，Size 可能偏小
 	Ref          any  // 数据源私有数据，删除前复核用
 }
 
