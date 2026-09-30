@@ -225,6 +225,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.QuitMsg:
 		closePage(a.page)
 		return a, tea.Quit
+	case screens.TerminalMsg:
+		owner := a.active()
+		return a, tea.ExecProcess(msg.Command, func(err error) tea.Msg {
+			return pageMsg{owner, msg.Done(err)}
+		})
 	case screens.RestartMsg:
 		a.restart = true
 		return a, tea.Quit

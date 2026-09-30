@@ -5,6 +5,7 @@ package screens
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"os/exec"
 
 	"github.com/KevinXC5/sysbox/internal/cleanup"
 	"github.com/KevinXC5/sysbox/internal/config"
@@ -80,6 +81,12 @@ func (s Setting) Show(v string) string {
 
 // ConfigMsg 首页修改了配置，由根模型更新运行中的配置并写回配置文件
 type ConfigMsg struct{ Edit func(*config.Config) }
+
+// TerminalMsg 请求根模型释放终端，执行 Shell 或编辑器后恢复原页面。
+type TerminalMsg struct {
+	Command *exec.Cmd
+	Done    func(error) tea.Msg
+}
 
 // BackMsg 返回首页
 type BackMsg struct{}

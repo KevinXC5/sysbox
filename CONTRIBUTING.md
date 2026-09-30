@@ -22,7 +22,7 @@ internal/
   selfupdate/        从 GitHub Release 检查与安装新版本
   uninstall/         卸载：删除程序、撤销安装时写入的 PATH、可选删除配置
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
-    jetbrains/  vscode/  agentjunk/  devcache/  projects/  claudeupdate/
+    jetbrains/  vscode/  agentjunk/  devcache/  projects/  claudeupdate/  containers/
   ui/
     theme/           配色（浅色、深色两套）、渐变、Logo、像素图标渲染
     widget/          顶栏、底栏、面板、弹窗、进度条等组件
@@ -44,6 +44,17 @@ install.ps1          Windows 安装脚本
 - 删除前检查只需关心所选条目时，额外实现 `cleanup.ItemChecker`
 - 新增工具：实现领域逻辑与页面，在 `internal/tui/registry.go` 登记一项即可；`Group` 决定放在首页哪个分类，`Icon` 是 6×4 的像素图标，画在 `internal/tui/icons.go`
 - 新增设置项：在 `Settings()` 中登记，选项型填 `Options`，文字型留空并在 `Set` 中校验输入
+
+### Docker 实测
+
+普通测试使用模拟命令返回值，不依赖 Docker 引擎或 Kubernetes 集群。真实 Docker 测试需显式开启，并指定已有的本地镜像（需默认命令持续运行且提供 `/bin/sh`，例如 nginx）：
+
+```bash
+SYSBOX_DOCKER_TEST=1 SYSBOX_DOCKER_TEST_IMAGE=nginx:1.29 go test -v ./internal/tools/containers -run TestDockerIntegration -count=1
+SYSBOX_DOCKER_TEST_PULL=1 go test -v ./internal/tools/containers -run TestDockerPullIntegration -count=1
+```
+
+启停、重启、日志、镜像标签和删除测试仅操作随机名称的临时容器和临时标签，结束后清理。拉取测试使用 `hello-world:latest`，测试前该标签已存在时跳过，避免更新现有镜像。
 
 ### 发布
 

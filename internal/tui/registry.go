@@ -75,6 +75,16 @@ func Tools() []screens.Tool {
 			return projects.NewSource(env.Config.Projects.Roots, env.Config.Projects.KeepDays)
 		}),
 		{
+			ID: "docker", Group: "工具", Name: "Docker 管理", Icon: iconDocker, Desc: "快速管理容器与镜像",
+			Detail: []string{"切换 Docker 环境，筛选容器与镜像", "容器启停、重启、日志、终端，多选批量操作", "拉取镜像、添加标签、创建容器与删除镜像", "左右分屏自动显示基础信息，快捷键直接操作"},
+			New:    screens.NewDocker,
+		},
+		{
+			ID: "k8s", Group: "工具", Name: "Kubernetes 管理", Icon: iconKubernetes, Desc: "管理 Deployment、ConfigMap、Pod 与 Node",
+			Detail: []string{"切换集群和命名空间，不改写全局 kubeconfig", "Deployment 扩缩容、滚动重启与发布状态", "查看日志、进入 Pod 终端、查看和编辑 YAML", "左右分屏自动显示基础信息，快捷键直接操作"},
+			New:    screens.NewKubernetes,
+		},
+		{
 			ID: "claude", Group: "工具", Name: "Claude Code 更新", Icon: iconDownload, Desc: "断点续传，校验后安装",
 			Detail: []string{
 				"安装 latest、stable 或指定版本的 Claude Code",

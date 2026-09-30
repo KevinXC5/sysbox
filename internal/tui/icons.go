@@ -49,6 +49,18 @@ var (
 
 // 工具图标
 var (
+	iconDocker = []string{ // 集装箱与鲸鱼
+		".bb.b.",
+		"bbbbbb",
+		"BBBBbc",
+		".cccc.",
+	}
+	iconKubernetes = []string{ // 舵轮
+		".bBBb.",
+		"bBwWBb",
+		"bBwwBb",
+		".bBBb.",
+	}
 	iconJetBrains = []string{ // 渐变描边的黑色方块与白色短横
 		"ppppcc",
 		"pKKKKc",

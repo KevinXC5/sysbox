@@ -205,7 +205,7 @@ func (m *selfUpdatePage) Body(w, h int) string {
 	m.spin.Style = theme.Fg(theme.Accent)
 	dw := widget.DialogWidth(64, w)
 	if m.state == upReady {
-		dw = widget.DialogWidth(80, w)
+		dw = widget.DialogWidth(w-4, w)
 	}
 	inner := widget.DialogInner(dw)
 	var lines []string
