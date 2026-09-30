@@ -93,6 +93,9 @@ func versionRules() []versionRule {
 		{"Claude", ".local/share/claude/versions", ".local/bin/" + exe("claude"), "", semverName, copyEntry},
 		// Codex 链接指向包含 bin/codex 的 release 目录
 		{"Codex", ".codex/packages/standalone/releases", ".codex/packages/standalone/current", "bin/" + exe("codex"), semverName, copyEntry},
+		// Codex 桌面端的 app-server 守护进程另有一套 release 目录，布局与 standalone 相同；
+		// local-<hash> 开头的本地构建不符合版本格式，会被跳过，守护进程可能用它回滚
+		{"Codex", ".codex/packages/app-server-daemon/releases", ".codex/packages/app-server-daemon/current", "bin/" + exe("codex"), semverName, copyEntry},
 	}
 }
 

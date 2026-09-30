@@ -294,6 +294,29 @@ func TestWindowsCopyRemoveRechecksEntry(t *testing.T) {
 	}
 }
 
+func TestCodexDaemonReleases(t *testing.T) {
+	s := fixture(t)
+	releases := filepath.Join(s.Home, ".codex/packages/app-server-daemon/releases")
+	local := "local-576ad33d-aarch64-apple-darwin"
+	for _, v := range []string{"0.157.0-aarch64-apple-darwin", "0.158.0-aarch64-apple-darwin", "0.159.2-aarch64-apple-darwin", local} {
+		write(t, filepath.Join(releases, v, "bin/codex"))
+	}
+	mustLink(t, filepath.Join(releases, "0.158.0-aarch64-apple-darwin"), filepath.Join(s.Home, ".codex/packages/app-server-daemon/current"))
+	setAge(t, releases, 10)
+	got := scan(t, s)
+
+	// 当前 0.158.0、最高 0.159.2 保留，本地构建不符合版本格式也不动
+	old := got[".codex/packages/app-server-daemon/releases/0.157.0-aarch64-apple-darwin"]
+	if old.Category != CatOld || !old.Selected {
+		t.Errorf("0.157.0 应归为旧版本：%+v", old)
+	}
+	for _, v := range []string{"0.158.0-aarch64-apple-darwin", "0.159.2-aarch64-apple-darwin", local} {
+		if it, ok := got[".codex/packages/app-server-daemon/releases/"+v]; ok {
+			t.Errorf("%s 不应出现：%+v", v, it)
+		}
+	}
+}
+
 func TestRemoveRecentAndReview(t *testing.T) {
 	s := fixture(t)
 	items := scan(t, s)
