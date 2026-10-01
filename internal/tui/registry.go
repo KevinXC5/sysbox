@@ -37,6 +37,21 @@ func Tools() []screens.Tool {
 			Detail: []string{"默认每 2 秒刷新 CPU、内存与端口，支持暂停和调整间隔", "按 CPU、内存、名称、PID、端口排序，搜索进程与端口", "查看父子进程、完整命令、网络连接与环境变量", "对比父子进程代理变量，支持多选结束与强制结束"},
 			New:    screens.NewProcesses,
 		},
+		{
+			ID: "network", Group: "系统", Name: "网络诊断", Icon: iconNetwork, Desc: "查询 DNS、TCP、HTTP 与代理配置",
+			Detail: []string{"查询域名的 IPv4 与 IPv6 地址", "检测 TCP 连通性、HTTP 状态与 DNS、连接、TLS 和首字节耗时", "查看代理环境变量、系统代理配置与实际 HTTP 请求路径"},
+			New:    screens.NewNetwork,
+		},
+		{
+			ID: "disk", Group: "系统", Name: "磁盘分析", Icon: iconDisk, Desc: "目录占用、大文件与磁盘容量",
+			Detail: []string{"查看各磁盘容量，按占用排序浏览目录与前 50 个大文件", "进入目录逐层分析，打开文件所在目录", "已识别的缓存与构建产物可跳转到对应清理工具", "只读扫描，不跟随符号链接，读取失败时标记统计不完整"},
+			New:    screens.NewDisk,
+		},
+		{
+			ID: "services", Group: "系统", Name: "服务与启动项", Icon: iconServices, Desc: "查看服务、启动项与日志，快速启停",
+			Detail: []string{"macOS 管理 launchd 服务与第三方 LaunchAgents、LaunchDaemons", "Windows 管理系统服务、Run 注册表启动项，查看启动文件夹", "搜索服务、查看详情与日志，确认后启停及调整启用状态", "按当前用户权限执行；演练模式展示命令而不修改系统"},
+			New:    screens.NewServices,
+		},
 		cleanTool(screens.Tool{
 			ID: "jetbrains", Group: "清理", Name: "JetBrains 缓存", Icon: iconJetBrains, Desc: "索引、编译缓存与 IDE 日志",
 			Detail: jetbrainsDetail(runtime.GOOS),

@@ -49,6 +49,24 @@ var (
 
 // 工具图标
 var (
+	iconNetwork = []string{ // 连接节点
+		"cc..bb",
+		".cSSb.",
+		"..SS..",
+		"..gg..",
+	}
+	iconDisk = []string{ // 磁盘与状态灯
+		"SSSSSS",
+		"SBBBBS",
+		"SSSSSS",
+		"SSggSS",
+	}
+	iconServices = []string{ // 启动按钮与服务列表
+		"c.SSSS",
+		"cc....",
+		"cccSSS",
+		"cc....",
+	}
 	iconProcesses = []string{ // 进程占用柱形图
 		".c..b.",
 		".cY.b.",

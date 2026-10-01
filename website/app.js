@@ -146,7 +146,10 @@ if ('IntersectionObserver' in window) {
 const views = {
   cache: { name: '开发缓存', alt: '按类别列出缓存占用与可选条目', caption: '扫描编辑器、包管理器和构建工具的缓存，按类别列出占用空间，勾选后清理。' },
   processes: { name: '进程管理', alt: '按 CPU 排序的进程列表，包含内存、用户与监听端口', caption: '按 CPU、内存或端口排序，搜索进程名、PID、命令与端口，多选后结束进程。' },
-  docker: { name: 'Docker 管理', alt: '容器列表与详情并排，显示挂载、网络与端口', caption: '容器列表和详情并排：挂载、网络与端口一目了然，日志、终端、启停都在快捷键上。' }
+  docker: { name: 'Docker 管理', alt: '容器列表与详情并排，显示挂载、网络与端口', caption: '容器列表和详情并排：挂载、网络与端口一目了然，日志、终端、启停都在快捷键上。' },
+  network: { name: '网络诊断', alt: 'DNS 解析结果与查询耗时，提供 TCP、HTTP 和代理诊断', caption: '查询 DNS 地址，检测 TCP 连通性，查看 HTTP 状态与各阶段耗时，检查代理配置。' },
+  disk: { name: '磁盘分析', alt: '按占用排序的目录列表与详情，提供大文件和磁盘容量查询', caption: '按占用逐层浏览目录，定位前 50 个大文件，查看各磁盘容量并打开对应清理工具。' },
+  services: { name: '服务与启动项', alt: '服务列表与状态详情，提供启动项、启停、启用状态和日志入口', caption: '搜索服务和启动项，查看详情与日志，确认后启停服务或调整启用状态。' }
 };
 const shot = { view: 'cache', theme: 'dark' };
 const previewImage = document.querySelector('#preview-image');
@@ -170,6 +173,10 @@ function bindToggle(selector, key) {
 }
 bindToggle('data-view', 'view');
 bindToggle('data-shot-theme', 'theme');
+// 功能卡片直接选择对应界面，再由锚点滚动到预览区。
+document.querySelectorAll('[data-preview-view]').forEach(link => {
+  link.addEventListener('click', () => document.querySelector(`[data-view="${link.dataset.previewView}"]`).click());
+});
 // 空闲时预载其余截图，切换时不闪白
 addEventListener('load', () => {
   Object.keys(views).forEach(view => ['dark', 'light'].forEach(theme => { new Image().src = `assets/${view}-${theme}.png`; }));

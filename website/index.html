@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#070b14">
   <meta name="color-scheme" content="only light">
   <meta name="darkreader-lock">
-  <meta name="description" content="sysbox：macOS 与 Windows 的终端系统维护工具箱。清理开发缓存、管理 Docker 与 Kubernetes、查看进程和端口，把日常维护收进一个界面。">
+  <meta name="description" content="sysbox：macOS 与 Windows 的终端系统维护工具箱。清理开发缓存、管理 Docker 与 Kubernetes、排查进程、网络、磁盘与服务，把日常维护收进一个界面。">
   <meta property="og:title" content="sysbox — 把系统维护，收进一个终端。">
-  <meta property="og:description" content="清理缓存、管理容器、排查进程。开源、跨平台、键盘操作的系统维护工具箱。">
+  <meta property="og:description" content="清理缓存、管理容器、排查进程与网络、分析磁盘、管理服务。开源、跨平台、键盘操作的系统维护工具箱。">
   <meta property="og:type" content="website">
   <title>sysbox — 终端里的系统维护工具箱</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -39,7 +39,7 @@
           <h1>让开发环境，<br><em>轻装上阵。</em></h1>
         </div>
         <div class="hero-side">
-          <p class="hero-description">清理堆积的缓存，照看运行的容器，找出占用的端口。日常维护不必四处翻命令，在一个终端界面里顺手完成。</p>
+          <p class="hero-description">清理堆积的缓存，照看运行的容器，排查端口和网络，定位磁盘占用，管理服务与启动项。日常维护不必四处翻命令，在一个终端界面里顺手完成。</p>
           <div class="hero-actions">
             <a class="key-button" href="#install">开始使用 <kbd>↵</kbd></a>
             <a class="key-button ghost" href="https://github.com/KevinXC5/sysbox" target="_blank" rel="noopener noreferrer">GitHub 源码 <kbd>↗</kbd></a>
@@ -49,15 +49,15 @@
       </div>
       <div class="container hero-stage">
         <div class="stage-deck" data-deck>
-          <figure class="stage-card is-front" data-theme="dark"><img src="assets/home-dark.png" alt="sysbox 深色主题首页，包含清理、工具、系统和设置分类" width="1814" height="1376" fetchpriority="high"></figure>
-          <figure class="stage-card is-back" data-theme="light"><img src="assets/home-light.png" alt="sysbox 浅色主题首页，包含清理、工具、系统和设置分类" width="1814" height="1376"></figure>
+          <figure class="stage-card is-front" data-theme="dark"><img src="assets/home-dark.png" alt="sysbox 深色主题首页，包含清理、工具、系统和设置分类" width="2720" height="2064" fetchpriority="high"></figure>
+          <figure class="stage-card is-back" data-theme="light"><img src="assets/home-light.png" alt="sysbox 浅色主题首页，包含清理、工具、系统和设置分类" width="2720" height="2064"></figure>
           <button class="stage-theme" type="button" aria-label="切换首页截图的深浅主题"><span aria-hidden="true">◐</span> <b data-theme-label>深色</b></button>
           <p class="stage-command"><span class="prompt">❯</span> sysbox<span class="cursor" aria-hidden="true"></span><small>从一个命令开始</small></p>
         </div>
       </div>
       <div class="ticker" aria-hidden="true">
         <div class="ticker-track">
-          <span><b>❯ sysbox devcache</b> 开发缓存</span><span><b>❯ sysbox docker</b> 容器管理</span><span><b>❯ sysbox k8s</b> 集群管理</span><span><b>❯ sysbox processes</b> 进程与端口</span><span><b>❯ sysbox jetbrains</b> IDE 缓存</span><span><b>❯ sysbox vscode</b> 编辑器缓存</span><span><b>❯ sysbox agent</b> Agent 垃圾</span><span><b>❯ sysbox projects</b> 构建产物</span><span><b>❯ sysbox claude</b> Claude Code 更新</span>
+          <span><b>❯ sysbox devcache</b> 开发缓存</span><span><b>❯ sysbox docker</b> 容器管理</span><span><b>❯ sysbox k8s</b> 集群管理</span><span><b>❯ sysbox processes</b> 进程与端口</span><span><b>❯ sysbox network</b> 网络诊断</span><span><b>❯ sysbox disk</b> 磁盘分析</span><span><b>❯ sysbox services</b> 服务与启动项</span><span><b>❯ sysbox jetbrains</b> IDE 缓存</span><span><b>❯ sysbox vscode</b> 编辑器缓存</span><span><b>❯ sysbox agent</b> Agent 垃圾</span><span><b>❯ sysbox projects</b> 构建产物</span><span><b>❯ sysbox claude</b> Claude Code 更新</span>
         </div>
       </div>
     </section>
@@ -71,7 +71,7 @@
             <div class="card-top"><span class="card-index">01 / CLEANUP</span><span class="card-command">sysbox devcache</span></div>
             <h3>给开发环境腾点空间</h3>
             <p>扫描编辑器、包管理器和旧项目的缓存与产物，看清每一项占了多少空间，再勾选要清理的条目。</p>
-            <div class="card-shot"><img src="assets/cache-dark.png" alt="开发缓存界面，显示缓存占用与可选条目" width="1814" height="1376" loading="lazy"></div>
+            <div class="card-shot"><img src="assets/cache-dark.png" alt="开发缓存界面，显示缓存占用与可选条目" width="2720" height="2064" loading="lazy"></div>
             <ul class="chips"><li>JetBrains</li><li>VS Code / Cursor</li><li>Go / npm / pnpm</li><li>Gradle / Maven / Cargo</li><li>Agent 垃圾</li></ul>
             <a class="card-link" href="https://github.com/KevinXC5/sysbox#功能">查看清理功能 <span aria-hidden="true">→</span></a>
           </article>
@@ -88,6 +88,29 @@
             <p>按 CPU、内存和端口查看进程。完整命令、父子进程、网络连接与环境变量，在同一处排查。</p>
             <ul class="chips"><li>CPU / 内存</li><li>监听端口</li><li>环境变量</li><li>自动刷新</li></ul>
             <a class="card-link" href="https://github.com/KevinXC5/sysbox#功能">了解进程排查 <span aria-hidden="true">→</span></a>
+          </article>
+        </div>
+        <div class="system-tools">
+          <article class="tool-card corners">
+            <div class="card-top"><span class="card-index">04 / NETWORK</span><span class="card-command">sysbox network</span></div>
+            <h3>连接问题，逐步查清</h3>
+            <p>查询域名地址，测试 TCP 连通性，查看 HTTP 状态与连接耗时。代理环境变量、系统配置和本次请求路径一起看。</p>
+            <ul class="chips"><li>DNS</li><li>TCP / HTTP</li><li>代理诊断</li></ul>
+            <a class="card-link" href="#preview" data-preview-view="network">查看网络诊断 <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="tool-card corners">
+            <div class="card-top"><span class="card-index">05 / DISK</span><span class="card-command">sysbox disk</span></div>
+            <h3>空间去哪了，一层层看</h3>
+            <p>查看各磁盘容量，按占用浏览目录，找出最大的文件。进入目录继续分析，匹配到缓存或构建产物时直接打开对应清理工具。</p>
+            <ul class="chips"><li>目录排行</li><li>大文件</li><li>磁盘容量</li></ul>
+            <a class="card-link" href="#preview" data-preview-view="disk">查看磁盘分析 <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="tool-card corners">
+            <div class="card-top"><span class="card-index">06 / SERVICES</span><span class="card-command">sysbox services</span></div>
+            <h3>后台服务，随时掌握</h3>
+            <p>查看服务状态和启动项，搜索名称与命令，查询详情和日志。启停服务、调整启用状态，确认后执行。</p>
+            <ul class="chips"><li>launchd</li><li>Windows 服务</li><li>启动项</li></ul>
+            <a class="card-link" href="#preview" data-preview-view="services">查看服务管理 <span aria-hidden="true">→</span></a>
           </article>
         </div>
         <div class="tool-index">
@@ -112,9 +135,9 @@
         </div>
         <div class="preview-workspace">
           <div class="preview-tabs" role="group" aria-label="选择界面">
-            <button class="active" data-view="cache" aria-pressed="true">开发缓存</button><button data-view="processes" aria-pressed="false">进程管理</button><button data-view="docker" aria-pressed="false">Docker 管理</button>
+            <button class="active" data-view="cache" aria-pressed="true">开发缓存</button><button data-view="processes" aria-pressed="false">进程管理</button><button data-view="docker" aria-pressed="false">Docker 管理</button><button data-view="network" aria-pressed="false">网络诊断</button><button data-view="disk" aria-pressed="false">磁盘分析</button><button data-view="services" aria-pressed="false">服务与启动项</button>
           </div>
-          <div class="screenshot-frame corners"><img id="preview-image" src="assets/cache-dark.png" alt="sysbox 开发缓存界面，按类别列出缓存占用与可选条目" width="1814" height="1376" loading="lazy"></div>
+          <div class="screenshot-frame corners"><img id="preview-image" src="assets/cache-dark.png" alt="sysbox 开发缓存界面，按类别列出缓存占用与可选条目" width="2720" height="2064" loading="lazy"></div>
           <div class="preview-foot">
             <p class="screenshot-caption" id="preview-caption">扫描编辑器、包管理器和构建工具的缓存，按类别列出占用空间，勾选后清理。</p>
             <div class="theme-switch" role="group" aria-label="切换截图主题"><button class="active" data-shot-theme="dark" aria-pressed="true">深色</button><button data-shot-theme="light" aria-pressed="false">浅色</button></div>
@@ -166,9 +189,9 @@
           <p class="section-description">没找到答案？到 <a href="https://github.com/KevinXC5/sysbox/issues">GitHub Issues</a> 提问。</p>
         </div>
         <div class="faq-list">
-          <details><summary>支持哪些系统？需要图形界面吗？<i aria-hidden="true"></i></summary><p>支持 macOS 与 Windows，提供 x86_64 和 ARM64 版本。sysbox 在终端中运行，Windows 建议使用 Windows Terminal。Docker 管理需要 Docker CLI 和运行中的引擎，Kubernetes 管理需要 kubectl 与集群访问权限。</p></details>
+          <details><summary>支持哪些系统？需要图形界面吗？<i aria-hidden="true"></i></summary><p>支持 macOS 与 Windows，提供 x86_64 和 ARM64 版本。sysbox 在终端中运行，Windows 建议使用 Windows Terminal。Docker 管理需要 Docker CLI 和运行中的引擎，Kubernetes 管理需要 kubectl 与集群访问权限。服务管理按当前用户权限执行，部分系统服务操作需要管理员权限。</p></details>
           <details><summary>清理会删掉我的配置和项目源码吗？<i aria-hidden="true"></i></summary><p>清理工具按各自规则筛选缓存与产物。JetBrains 清理不处理设置与插件目录；VS Code 的设置、备份与未知目录默认不勾选，但部分条目允许手动纳入。项目产物会检查对应项目文件和构建特征。请在确认前阅读所选条目与操作提示。<a href="https://github.com/KevinXC5/sysbox#功能">查看功能概览 ↗</a></p></details>
-          <details><summary>可以只打开某一个工具吗？<i aria-hidden="true"></i></summary><p>可以。运行 sysbox devcache 打开开发缓存，sysbox docker 管理容器，sysbox processes 查看进程。运行 sysbox list 查看全部工具名。</p></details>
+          <details><summary>可以只打开某一个工具吗？<i aria-hidden="true"></i></summary><p>可以。运行 sysbox devcache 打开开发缓存，sysbox docker 管理容器，sysbox processes 查看进程，sysbox network 诊断网络，sysbox disk 分析磁盘，sysbox services 管理服务与启动项。运行 sysbox list 查看全部工具名。</p></details>
           <details><summary>深色和浅色主题怎么切换？<i aria-hidden="true"></i></summary><p>默认跟随终端背景。按 t 在自动、浅色、深色之间切换，选择会被记住；也可以运行 sysbox --theme light，或在首页设置里修改。</p></details>
           <details><summary>怎么更新或卸载？<i aria-hidden="true"></i></summary><p>运行 sysbox update 更新，或在首页提示新版本时按 u。运行 sysbox uninstall 卸载并保留配置；sysbox uninstall --purge 同时移除配置。卸载前会列出操作并确认。</p></details>
           <details><summary>在哪里反馈问题或参与开发？<i aria-hidden="true"></i></summary><p>可以到 <a href="https://github.com/KevinXC5/sysbox/issues">GitHub Issues</a> 报告问题、提出功能建议。参与开发请查看 <a href="https://github.com/KevinXC5/sysbox/blob/main/CONTRIBUTING.md">贡献指南</a>。</p></details>

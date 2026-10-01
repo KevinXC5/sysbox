@@ -1,6 +1,6 @@
 # sysbox
 
-macOS 与 Windows 上的终端系统维护工具箱，集中处理开发缓存清理、容器管理、进程排查和工具更新。
+macOS 与 Windows 上的终端系统维护工具箱，集中处理开发缓存清理、容器管理、进程排查、网络诊断、磁盘分析、服务管理和工具更新。
 
 ## 功能
 
@@ -15,11 +15,14 @@ macOS 与 Windows 上的终端系统维护工具箱，集中处理开发缓存�
 | 工具 | Kubernetes 管理 | 切换集群与命名空间，管理 Deployment、ConfigMap、Pod、Node |
 | 工具 | Claude Code 更新 | 下载指定版本，校验后调用官方安装 |
 | 系统 | 进程管理 | 查看 CPU、内存、端口、网络连接、父子进程与环境变量，搜索并结束进程 |
+| 系统 | 网络诊断 | 查询 DNS、检测 TCP 连通性、查看 HTTP 状态与耗时，检查代理配置 |
+| 系统 | 磁盘分析 | 查看磁盘容量、目录占用排行与大文件，逐层分析并打开对应清理工具 |
+| 系统 | 服务与启动项 | 查询服务和启动项，确认后启停、启用或禁用，查看详情与日志 |
 | 设置 | 首页设置 | 调整主题、动画、保留天数、扫描目录、下载代理与更新检查 |
 
 支持一键扫描可释放空间、深浅主题和键盘操作。清理前可勾选条目并确认，也可用 `--dry-run` 演练流程。
 
-Docker 管理需要 Docker CLI 与运行中的引擎；Kubernetes 管理需要 kubectl 与集群访问权限。
+Docker 管理需要 Docker CLI 与运行中的引擎；Kubernetes 管理需要 kubectl 与集群访问权限。服务管理按当前用户权限执行，部分系统服务操作需要管理员权限；Windows 启动文件夹项目仅展示。
 
 ## 安装
 
@@ -48,6 +51,9 @@ sysbox devcache        # 直接打开开发缓存清理
 sysbox docker          # 管理 Docker 容器与镜像
 sysbox k8s             # 管理 Kubernetes 资源
 sysbox processes       # 查看进程与端口
+sysbox network         # 网络诊断
+sysbox disk            # 磁盘分析
+sysbox services        # 服务与启动项
 sysbox --dry-run       # 演练模式，不执行修改
 ```
 
@@ -71,5 +77,8 @@ sysbox uninstall --purge # 卸载程序并删除配置
 | ![开发缓存（深色）](docs/screenshots/dark/07-devcache.png) | ![开发缓存（浅色）](docs/screenshots/light/07-devcache.png) |
 | ![Docker 管理（深色）](docs/screenshots/dark/docker.png) | ![Docker 管理（浅色）](docs/screenshots/light/docker.png) |
 | ![进程管理（深色）](docs/screenshots/dark/processes.png) | ![进程管理（浅色）](docs/screenshots/light/processes.png) |
+| ![网络诊断（深色）](docs/screenshots/dark/network.png) | ![网络诊断（浅色）](docs/screenshots/light/network.png) |
+| ![磁盘分析（深色）](docs/screenshots/dark/disk.png) | ![磁盘分析（浅色）](docs/screenshots/light/disk.png) |
+| ![服务与启动项（深色）](docs/screenshots/dark/services.png) | ![服务与启动项（浅色）](docs/screenshots/light/services.png) |
 
 开发与贡献请参阅[开发指南](CONTRIBUTING.md)。

@@ -361,6 +361,10 @@ func (p *processPage) Update(msg tea.Msg) tea.Cmd {
 			item, _ := p.current()
 			p.descending = !p.descending
 			p.rebuild(processes.Identity(item))
+		case "n":
+			if p.modal == nil {
+				return Open("network")
+			}
 		case "r":
 			return tea.Batch(p.refresh(), p.loadDetails(true))
 		case "p":
@@ -447,7 +451,7 @@ func (p *processPage) Body(w, h int) string {
 		direction = "↑"
 	}
 	head := fmt.Sprintf("排序：%s %s · %s · 已选 %d", processSortLabels[p.sortKey], direction, p.Status(), len(p.selected))
-	hints := theme.HintsFit(iw, "enter", "详情", "/", "搜索", "s", "排序", "S", "升降序", "p", "暂停刷新", "i", "间隔", "r", "刷新", "space", "多选", "d", "结束", "D", "强制结束")
+	hints := theme.HintsFit(iw, "enter", "详情", "/", "搜索", "s", "排序", "S", "升降序", "p", "暂停刷新", "i", "间隔", "r", "刷新", "n", "网络诊断", "space", "多选", "d", "结束", "D", "强制结束")
 	top := theme.Truncate(head, iw) + "\n" + hints
 	return lipgloss.NewStyle().PaddingLeft(1).Render(top + "\n" + p.listPane(iw, max(5, h-3)))
 }

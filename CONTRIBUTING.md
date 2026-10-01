@@ -6,7 +6,7 @@
 make build    # 编译到 bin/sysbox
 make dry      # 演练模式运行
 make test     # 格式检查、静态检查与测试
-make record   # 重新录制截图，终端 197 × 58，依赖 vhs 与 Maple Mono NF CN 字体
+make record   # 生成 2720 × 2064 高清 PNG，依赖 vhs 与 Maple Mono NF CN 字体
 ```
 
 ### 目录结构
@@ -22,7 +22,7 @@ internal/
   selfupdate/        从 GitHub Release 检查与安装新版本
   uninstall/         卸载：删除程序、撤销安装时写入的 PATH、可选删除配置
   tools/             各工具的领域逻辑，不依赖界面，均有单元测试
-    jetbrains/  vscode/  agentjunk/  devcache/  projects/  claudeupdate/  containers/
+    jetbrains/  vscode/  agentjunk/  devcache/  projects/  claudeupdate/  containers/  processes/  network/  disk/  services/
   ui/
     theme/           配色（浅色、深色两套）、渐变、Logo、像素图标渲染
     widget/          顶栏、底栏、面板、弹窗、进度条等组件
@@ -44,6 +44,14 @@ install.ps1          Windows 安装脚本
 - 删除前检查只需关心所选条目时，额外实现 `cleanup.ItemChecker`
 - 新增工具：实现领域逻辑与页面，在 `internal/tui/registry.go` 登记一项即可；`Group` 决定放在首页哪个分类，`Icon` 是 6×4 的像素图标，画在 `internal/tui/icons.go`
 - 新增设置项：在 `Settings()` 中登记，选项型填 `Options`，文字型留空并在 `Set` 中校验输入
+
+### 静态截图
+
+`make record` 截取 README 和官网所需页面的深浅两种主题；`scripts/record.sh dark` 只截取深色，`website/capture.sh` 只截取官网展示的页面。
+
+截图使用 1 FPS、零打字延迟和 2720 × 2064 画布，只输出 PNG，不生成 GIF 或视频。等待页面就绪后才采帧，截图指令后等待 1.2 秒，确保下一帧完整保存。录制使用临时配置，关闭更新检查和界面动画，不改动用户配置。
+
+普通页面使用真实数据，仅打开、查看和退出。确认与完成两张示例在演练模式下生成，不执行删除。官网复用同一套 PNG。宣传视频由独立的视频制作流程生成。
 
 ### Docker 实测
 
