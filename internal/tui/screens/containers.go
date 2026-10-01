@@ -405,6 +405,9 @@ func (p *resourcePage) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		return p.waitLogs()
+	case resourceSaveMsg:
+		p.notice = fmt.Sprintf("打包镜像 %d/%d · %s", msg.Done+1, msg.Total, msg.Name)
+		return p.waitPull()
 	case resourcePullMsg:
 		p.notice = fmt.Sprintf("拉取镜像 %d/%d · %s", msg.Done+1, msg.Total, msg.Name)
 		return p.waitPull()
@@ -529,6 +532,14 @@ func (p *resourcePage) Update(msg tea.Msg) tea.Cmd {
 					}
 				}
 			}
+		case "e", "E":
+			if !p.client.Kubernetes && p.kinds[p.tab] == "images" {
+				return p.beginSave(key == "E")
+			}
+			if key == "E" {
+				return p.activate("exec", true)
+			}
+			return p.activate("exec", false)
 		case "P":
 			if !p.client.Kubernetes {
 				return p.pullAll()
@@ -619,6 +630,12 @@ func (p *resourcePage) updateInput(msg tea.KeyMsg) tea.Cmd {
 			p.input.Blur()
 			p.mode = resourceList
 			return nil
+		case "save-directory":
+			if value == "" {
+				p.err = fmt.Errorf("请输入保存目录")
+				return nil
+			}
+			return p.saveImages(value)
 		case "namespace":
 			if value == "" || strings.ContainsAny(value, " \t\r\n") || strings.HasPrefix(value, "-") {
 				p.err = fmt.Errorf("请输入命名空间名称，或 * 查看全部")

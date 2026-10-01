@@ -66,7 +66,8 @@ type systemSpec struct {
 	submit     func(tab int, value string) (int, string) // 输入完成后要切换到的类别与目标
 	parent     func(tab int, target string) (string, bool)
 	load       func(ctx context.Context, tab int, target string, force bool) (systemResult, error)
-	live       func(tab int) (systemResult, bool) // 加载期间定时读取进度或部分结果
+	live       func(tab int) (systemResult, bool)   // 加载期间定时读取进度或部分结果
+	panes      func(p *systemPage, w, h int) string // 自定义主体分栏
 	actions    func(tab int, row systemRow) []systemAction
 }
 type systemLoadedMsg struct {
@@ -520,7 +521,10 @@ func (p *systemPage) Body(w, h int) string {
 		}
 		tabs = append(tabs, style.Render(label))
 	}
-	bar := lipgloss.JoinHorizontal(lipgloss.Top, interleaveTabs(tabs)...) + "   " + theme.Key("Tab") + theme.MutedStyle.Render(" 切换类别")
+	bar := lipgloss.JoinHorizontal(lipgloss.Top, interleaveTabs(tabs)...)
+	if len(tabs) > 1 {
+		bar += "   " + theme.Key("Tab") + theme.MutedStyle.Render(" 切换类别")
+	}
 	top = append(top, theme.Truncate(bar, iw))
 	if info := p.result.info; info != "" {
 		top = append(top, theme.Truncate(theme.SubtleStyle.Render(resourceText(info)), iw))
@@ -553,6 +557,8 @@ func (p *systemPage) Body(w, h int) string {
 	rw := iw - gap - lw
 	var body string
 	switch {
+	case p.spec.panes != nil:
+		body = p.spec.panes(p, iw, room)
 	case iw < 76 && p.focus == 1:
 		body = p.detailPane(iw, room)
 	case iw < 76:

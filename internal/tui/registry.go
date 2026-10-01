@@ -39,12 +39,12 @@ func Tools() []screens.Tool {
 		},
 		{
 			ID: "network", Group: "系统", Name: "网络诊断", Icon: iconNetwork, Desc: "常用服务连通性、代理对比与本机网络",
-			Detail: []string{"打开即并发检测 GitHub、npm、PyPI、Docker Hub 等常用服务", "逐段显示 DNS、连接、TLS、HTTP 耗时，定位失败环节并给出建议", "对比系统代理与终端代理，一键复制终端代理设置命令", "查看网卡地址、默认网关与 DNS 服务器"},
+			Detail: []string{"打开即并发检测 GitHub、npm、PyPI、Docker Hub 等常用服务", "全宽表格逐项显示结果，回车查看 DNS、连接、TLS、HTTP 链路详情", "重测当前目标或全部目标，直接对比选中目标的直连与代理线路", "查看网卡地址、默认网关与 DNS 服务器"},
 			New:    screens.NewNetwork,
 		},
 		{
 			ID: "disk", Group: "系统", Name: "磁盘分析", Icon: iconDisk, Desc: "目录占用、大文件与磁盘容量",
-			Detail: []string{"扫描一次即可逐层进入、返回上级与切换视图，无需重复扫描", "实时显示扫描进度，可随时停止并查看已统计的部分", "按占比条浏览目录与大文件，确认后移到废纸篓或回收站", "已识别的缓存与构建产物可跳转到对应清理工具"},
+			Detail: []string{"默认扫描启动目录，也可自定义目录或选择磁盘根目录", "实时显示扫描进度，可随时停止并查看已统计的部分", "三栏保留最近三层，左右进入返回，按名称或大小排序", "确认后移到废纸篓或回收站，缓存与构建产物可打开对应清理工具"},
 			New:    screens.NewDisk,
 		},
 		{
@@ -96,7 +96,7 @@ func Tools() []screens.Tool {
 		}),
 		{
 			ID: "docker", Group: "工具", Name: "Docker 管理", Icon: iconDocker, Desc: "快速管理容器与镜像",
-			Detail: []string{"切换 Docker 环境，筛选容器与镜像", "容器启停、重启、日志、终端，多选批量操作", "拉取镜像、添加标签、创建容器与删除镜像", "左右分屏自动显示基础信息，快捷键直接操作"},
+			Detail: []string{"切换 Docker 环境，筛选容器与镜像", "容器启停、重启、日志、终端，多选批量操作", "拉取镜像、添加标签、创建容器与删除镜像", "单选或多选镜像，一键生成带标签、ID 与创建时间的压缩包", "左右分屏自动显示基础信息，快捷键直接操作"},
 			New:    screens.NewDocker,
 		},
 		{

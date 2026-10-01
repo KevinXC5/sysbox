@@ -82,11 +82,13 @@ TAPE
     # 基础列表与异步详情分别加载，给详情留出时间。
     printf 'Sleep 1s\n'
     screenshot docker
+    printf 'Tab\nWait+Screen@60s /打包镜像/\n'
+    screenshot docker-images
     close_page
     # 等待全部目标检测完成，状态栏显示条目数
-    shot network network '[0-9]+ . [0-9]+ 项'
-    open_page disk '选择磁盘'
-    printf 'Type "g"\nCtrl+U\nType "."\nEnter\nWait+Screen@60s /扫描于/\n'
+    shot network network '待完成 0'
+    open_page disk '扫描于'
+    printf 'Right\nSleep 300ms\nRight\nSleep 300ms\n'
     screenshot disk
     close_page
     shot services services '共 [0-9]+ 项'

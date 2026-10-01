@@ -38,12 +38,16 @@ func NewDisk(env Env) Page {
 	if err != nil {
 		return NewErrorPage([]string{"系统", "磁盘分析"}, err)
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return NewErrorPage([]string{"系统", "磁盘分析"}, err)
+	}
 	s := &diskState{home: home}
-	spec := systemSpec{name: "磁盘分析", tabs: []string{"目录占用", "大文件", "磁盘容量"}, initialTab: 2, target: home}
+	spec := systemSpec{name: "磁盘分析", tabs: []string{"目录占用", "大文件", "磁盘容量"}, target: cwd}
 	spec.columns = func(tab int) []systemColumn {
 		switch tab {
 		case 0:
-			return []systemColumn{{title: "名称"}, {title: "占比", width: 14, bar: true}, {title: "大小", width: 9, right: true}, {title: "文件数", width: 8, right: true}}
+			return []systemColumn{{title: "名称"}, {title: "大小", width: 9, right: true}}
 		case 1:
 			return []systemColumn{{title: "文件"}, {title: "大小", width: 9, right: true}, {title: "修改日期", width: 10}, {title: "所在目录"}}
 		}
@@ -123,7 +127,9 @@ func NewDisk(env Env) Page {
 		}
 		return actions
 	}
-	return newSystemPage(env, spec)
+	p := &diskPage{systemPage: newSystemPage(env, spec), state: s}
+	p.spec.panes = p.panes
+	return p
 }
 
 func (s *diskState) loadVolumes(ctx context.Context) (systemResult, error) {
@@ -205,16 +211,15 @@ func (s *diskState) loadTree(ctx context.Context, tab int, target string, force 
 		return result, nil
 	}
 	for _, child := range node.Children {
-		row := systemRow{name: child.Name, key: child.Path, cells: []string{"", fsx.FormatBytes(child.Bytes), ""}, ratio: float64(child.Bytes) / float64(max(1, node.Bytes)), value: child, fields: s.nodeFields(child, node)}
+		row := systemRow{name: child.Name, key: child.Path, cells: []string{fsx.FormatBytes(child.Bytes)}, ratio: float64(child.Bytes) / float64(max(1, node.Bytes)), value: child, fields: s.nodeFields(child, node)}
 		if child.Dir {
 			row.name += string(filepath.Separator)
-			row.cells[2] = fmt.Sprint(child.Files)
 			row.target = child.Path
 		}
 		result.rows = append(result.rows, row)
 	}
 	if node.Rest > 0 {
-		result.rows = append(result.rows, systemRow{name: fmt.Sprintf("其他 %d 个小文件", node.Rest), key: "rest", cells: []string{"", fsx.FormatBytes(node.RestBytes), fmt.Sprint(node.Rest)}, ratio: float64(node.RestBytes) / float64(max(1, node.Bytes)), fields: []containers.Field{{Value: "合并统计"}, {Label: "说明", Value: "文件较多的目录只单独列出较大的文件，其余合并为一行；可在「大文件」中查看"}, {Label: "数量", Value: fmt.Sprint(node.Rest)}, {Label: "占用", Value: fsx.FormatBytes(node.RestBytes)}}})
+		result.rows = append(result.rows, systemRow{name: fmt.Sprintf("其他 %d 个小文件", node.Rest), key: "rest", cells: []string{fsx.FormatBytes(node.RestBytes)}, ratio: float64(node.RestBytes) / float64(max(1, node.Bytes)), fields: []containers.Field{{Value: "合并统计"}, {Label: "说明", Value: "文件较多的目录只单独列出较大的文件，其余合并为一行；可在「大文件」中查看"}, {Label: "数量", Value: fmt.Sprint(node.Rest)}, {Label: "占用", Value: fsx.FormatBytes(node.RestBytes)}}})
 	}
 	return result, nil
 }

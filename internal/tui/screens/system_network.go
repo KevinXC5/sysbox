@@ -24,16 +24,17 @@ type networkState struct {
 	custom  []string
 	reports map[string]network.Report
 	pending map[string]bool
+	checked map[string]time.Time
 	proxy   network.ProxySettings
 }
 
 func NewNetwork(env Env) Page {
-	s := &networkState{reports: map[string]network.Report{}, pending: map[string]bool{}}
+	s := &networkState{reports: map[string]network.Report{}, pending: map[string]bool{}, checked: map[string]time.Time{}}
 	spec := systemSpec{name: "网络诊断", tabs: []string{"连通性", "代理", "本机网络"}, timeout: 40 * time.Second}
 	spec.columns = func(tab int) []systemColumn {
 		switch tab {
 		case 0:
-			return []systemColumn{{title: "目标"}, {title: "结果", width: 18}, {title: "耗时", width: 8, right: true}, {title: "线路", width: 16}}
+			return []systemColumn{{title: "目标"}, {title: "结果", width: 22}, {title: "耗时", width: 9, right: true}, {title: "线路"}, {title: "失败环节", width: 10}, {title: "检测时间", width: 8}}
 		case 1:
 			return []systemColumn{{title: "项目", width: 18}, {title: "状态", width: 12}, {title: "内容"}}
 		}
@@ -52,33 +53,18 @@ func NewNetwork(env Env) Page {
 	spec.load = func(ctx context.Context, tab int, target string, force bool) (systemResult, error) {
 		switch tab {
 		case 0:
-			return s.loadTargets(ctx, force)
+			return s.rows(), nil
 		case 1:
 			return s.loadProxy(ctx, target)
 		}
 		return loadLocalNetwork(ctx)
 	}
-	spec.live = func(tab int) (systemResult, bool) {
-		if tab != 0 {
-			return systemResult{}, false
-		}
-		return s.rows(), true
-	}
 	spec.actions = func(tab int, row systemRow) []systemAction {
 		switch tab {
 		case 0:
-			target := row.key
-			actions := []systemAction{{key: "enter", label: "重新检测", reload: true, run: func(context.Context) (string, error) {
-				s.mu.Lock()
-				delete(s.reports, target)
-				s.mu.Unlock()
-				return "", nil
-			}}}
-			if s.isCustom(target) {
-				actions = append(actions, systemAction{key: "x", label: "移除目标", reload: true, run: func(context.Context) (string, error) {
-					s.remove(target)
-					return "已移除 " + target, nil
-				}})
+			actions := []systemAction{{key: "enter", label: "链路详情"}, {key: "r", label: "重测当前"}, {key: "p", label: "对比线路"}}
+			if s.isCustom(row.key) {
+				actions = append(actions, systemAction{key: "x", label: "移除目标"})
 			}
 			return actions
 		case 1:
@@ -92,12 +78,14 @@ func NewNetwork(env Env) Page {
 				if err := copyText(ctx, command); err != nil {
 					return "", err
 				}
-				return "已复制：" + command, nil
+				return "已复制：" + command + "；在执行命令的终端重新启动 sysbox 后生效", nil
 			}}}
 		}
 		return nil
 	}
-	return newSystemPage(env, spec)
+	p := &networkPage{systemPage: newSystemPage(env, spec), state: s, checks: map[string]networkCheck{}, limit: make(chan struct{}, 6)}
+	p.spec.panes = func(base *systemPage, w, h int) string { return base.listPane(w, h) }
+	return p
 }
 
 func (s *networkState) isCustom(target string) bool {
@@ -134,6 +122,8 @@ func (s *networkState) remove(target string) {
 	}
 	s.custom = kept
 	delete(s.reports, target)
+	delete(s.pending, target)
+	delete(s.checked, target)
 }
 
 type networkTarget struct{ name, target string }
@@ -149,46 +139,6 @@ func (s *networkState) targets() []networkTarget {
 	return out
 }
 
-// loadTargets 并发检测全部目标，只补测还没有结果的项；用户输入的目标排在最前
-func (s *networkState) loadTargets(ctx context.Context, force bool) (systemResult, error) {
-	proxy, _ := network.SystemProxy(ctx)
-	s.mu.Lock()
-	s.proxy = proxy
-	if force {
-		s.reports = map[string]network.Report{}
-	}
-	var todo []string
-	for _, t := range s.targets() {
-		if _, ok := s.reports[t.target]; !ok {
-			todo = append(todo, t.target)
-			s.pending[t.target] = true
-		}
-	}
-	s.mu.Unlock()
-	var wg sync.WaitGroup
-	limit := make(chan struct{}, 6)
-	for _, target := range todo {
-		wg.Add(1)
-		go func(target string) {
-			defer wg.Done()
-			limit <- struct{}{}
-			defer func() { <-limit }()
-			checkCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
-			defer cancel()
-			report := network.Check(checkCtx, target, network.Via{Mode: network.RouteEnv})
-			s.mu.Lock()
-			delete(s.pending, target)
-			if ctx.Err() == nil {
-				s.reports[target] = report
-			}
-			s.mu.Unlock()
-		}(target)
-	}
-	wg.Wait()
-	result := s.rows()
-	return result, ctx.Err()
-}
-
 func (s *networkState) rows() systemResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -198,8 +148,12 @@ func (s *networkState) rows() systemResult {
 		row := systemRow{name: t.name, key: t.target, ratio: -1}
 		report, done := s.reports[t.target]
 		if !done {
-			row.cells, row.tone = []string{"检测中…", "", ""}, theme.Muted
-			row.fields = []containers.Field{{Label: "地址", Value: t.target}, {Label: "状态", Value: "正在检测"}}
+			status := "未检测"
+			if s.pending[t.target] {
+				status = "检测中…"
+			}
+			row.cells, row.tone = []string{status, "", "", "", ""}, theme.Muted
+			row.fields = []containers.Field{{Label: "地址", Value: t.target}, {Label: "状态", Value: status}}
 			result.rows = append(result.rows, row)
 			continue
 		}
@@ -209,6 +163,7 @@ func (s *networkState) rows() systemResult {
 			failed++
 		}
 		row.cells, row.tone = reportCells(report)
+		row.cells = append(row.cells, report.Failed, s.checked[t.target].Format("15:04:05"))
 		row.fields = reportFields(report, s.proxy)
 		result.rows = append(result.rows, row)
 	}
@@ -216,9 +171,9 @@ func (s *networkState) rows() systemResult {
 	if network.EnvProxySet() {
 		route = "按终端代理变量"
 	}
-	result.info = fmt.Sprintf("可访问 %d · 失败 %d · 线路：%s（与 git、npm、curl 等命令行工具一致）", ok, failed, route)
+	result.info = fmt.Sprintf("可访问 %d · 失败 %d · 待完成 %d · 线路：%s", ok, failed, len(result.rows)-ok-failed, route)
 	if failed > 0 && s.proxy.Enabled() && !network.EnvProxySet() {
-		result.warn = "系统代理已开启，但终端没有设置代理；到「代理」类别按 c 复制设置命令"
+		result.warn = "系统代理已开启，终端未设置代理；选中失败目标按 p 对比线路"
 	}
 	return result
 }
@@ -280,7 +235,7 @@ func reportHint(r network.Report, proxy network.ProxySettings) string {
 	}
 	switch {
 	case r.Route == "直连" && proxy.Enabled():
-		return "系统代理已开启，但终端程序不会自动使用。到「代理」类别按 c 复制设置命令"
+		return "系统代理已开启，但终端程序不会自动使用。按 p 对比当前目标的线路"
 	case r.Failed == "DNS":
 		return "检查网络连接和 DNS 服务器，见「本机网络」"
 	case r.Failed == "连接代理":
@@ -389,6 +344,7 @@ func (s *networkState) loadProxy(ctx context.Context, target string) (systemResu
 		} else {
 			cells, tone := reportCells(c.report)
 			row.cells, row.tone = []string{cells[0], cells[1] + " · " + cells[2]}, tone
+			row.value = c.report
 			row.fields = reportFields(c.report, network.ProxySettings{})
 		}
 		result.rows = append(result.rows, row)

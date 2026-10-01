@@ -22,7 +22,7 @@ func (p *resourcePage) shortcuts() []resourceShortcut {
 	if !p.client.Kubernetes {
 		shortcuts = append(shortcuts, resourceShortcut{"p", "pull", "拉取镜像"}, resourceShortcut{"P", "pull-all", "拉取所有镜像"})
 		if ok && p.kinds[p.tab] == "images" {
-			shortcuts = append(shortcuts, resourceShortcut{"s", "run", "创建容器"}, resourceShortcut{"g", "tag", "添加标签"}, resourceShortcut{"d", "rmi", "删除"})
+			shortcuts = append(shortcuts, resourceShortcut{"e", "save", "打包镜像"}, resourceShortcut{"E", "save-directory", "指定保存目录"}, resourceShortcut{"s", "run", "创建容器"}, resourceShortcut{"g", "tag", "添加标签"}, resourceShortcut{"d", "rmi", "删除"})
 		} else if ok {
 			shortcuts = append(shortcuts, resourceShortcut{"l", "logs", "实时日志"}, resourceShortcut{"e", "exec", "终端"})
 			switch item.State {
@@ -57,7 +57,7 @@ func (p *resourcePage) shortcuts() []resourceShortcut {
 	}
 	var available []resourceShortcut
 	for _, shortcut := range shortcuts {
-		if shortcut.id == "pull" || shortcut.id == "pull-all" {
+		if shortcut.id == "pull" || shortcut.id == "pull-all" || shortcut.id == "save" || shortcut.id == "save-directory" {
 			available = append(available, shortcut)
 			continue
 		}
