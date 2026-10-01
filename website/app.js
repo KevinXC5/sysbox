@@ -147,9 +147,9 @@ const views = {
   cache: { name: '开发缓存', alt: '按类别列出缓存占用与可选条目', caption: '扫描编辑器、包管理器和构建工具的缓存，按类别列出占用空间，勾选后清理。' },
   processes: { name: '进程管理', alt: '按 CPU 排序的进程列表，包含内存、用户与监听端口', caption: '按 CPU、内存或端口排序，搜索进程名、PID、命令与端口，多选后结束进程。' },
   docker: { name: 'Docker 管理', alt: '容器列表与详情并排，显示挂载、网络与端口', caption: '容器列表和详情并排：挂载、网络与端口一目了然，日志、终端、启停都在快捷键上。' },
-  network: { name: '网络诊断', alt: 'DNS 解析结果与查询耗时，提供 TCP、HTTP 和代理诊断', caption: '查询 DNS 地址，检测 TCP 连通性，查看 HTTP 状态与各阶段耗时，检查代理配置。' },
-  disk: { name: '磁盘分析', alt: '按占用排序的目录列表与详情，提供大文件和磁盘容量查询', caption: '按占用逐层浏览目录，定位前 50 个大文件，查看各磁盘容量并打开对应清理工具。' },
-  services: { name: '服务与启动项', alt: '服务列表与状态详情，提供启动项、启停、启用状态和日志入口', caption: '搜索服务和启动项，查看详情与日志，确认后启停服务或调整启用状态。' }
+  network: { name: '网络诊断', alt: '常用开发服务的连通性列表，右侧逐段显示 DNS、连接、TLS 与 HTTP 耗时', caption: '一次检测常用开发服务，逐段定位失败环节；对比系统代理与终端代理，复制设置命令。' },
+  disk: { name: '磁盘分析', alt: '带占比条的目录占用列表与详情', caption: '扫描一次即可逐层浏览目录与大文件，占比一目了然，确认后移到废纸篓或交给清理工具。' },
+  services: { name: '服务与启动项', alt: '第三方服务表格，显示状态、来源、启动方式与 PID', caption: '默认只看第三方服务与启动项，按状态一键启停、重启或禁用，异常排在最前。' }
 };
 const shot = { view: 'cache', theme: 'dark' };
 const previewImage = document.querySelector('#preview-image');

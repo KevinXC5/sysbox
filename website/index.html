@@ -94,22 +94,22 @@
           <article class="tool-card corners">
             <div class="card-top"><span class="card-index">04 / NETWORK</span><span class="card-command">sysbox network</span></div>
             <h3>连接问题，逐步查清</h3>
-            <p>查询域名地址，测试 TCP 连通性，查看 HTTP 状态与连接耗时。代理环境变量、系统配置和本次请求路径一起看。</p>
-            <ul class="chips"><li>DNS</li><li>TCP / HTTP</li><li>代理诊断</li></ul>
+            <p>打开就检测 GitHub、npm、PyPI、Docker Hub 等常用服务，逐段显示 DNS、连接、TLS 与 HTTP，直接指出卡在哪一步。浏览器能上、终端不行？对比系统代理和终端代理，一键复制设置命令。</p>
+            <ul class="chips"><li>链路检测</li><li>代理对比</li><li>本机网络</li></ul>
             <a class="card-link" href="#preview" data-preview-view="network">查看网络诊断 <span aria-hidden="true">→</span></a>
           </article>
           <article class="tool-card corners">
             <div class="card-top"><span class="card-index">05 / DISK</span><span class="card-command">sysbox disk</span></div>
             <h3>空间去哪了，一层层看</h3>
-            <p>查看各磁盘容量，按占用浏览目录，找出最大的文件。进入目录继续分析，匹配到缓存或构建产物时直接打开对应清理工具。</p>
-            <ul class="chips"><li>目录排行</li><li>大文件</li><li>磁盘容量</li></ul>
+            <p>扫描一次，逐层进入、返回上级和切换视图都不再等待。占比条一眼看出大头，扫描进度实时可见；确认后移到废纸篓，缓存和构建产物直接交给对应清理工具。</p>
+            <ul class="chips"><li>目录排行</li><li>大文件</li><li>移到废纸篓</li></ul>
             <a class="card-link" href="#preview" data-preview-view="disk">查看磁盘分析 <span aria-hidden="true">→</span></a>
           </article>
           <article class="tool-card corners">
             <div class="card-top"><span class="card-index">06 / SERVICES</span><span class="card-command">sysbox services</span></div>
             <h3>后台服务，随时掌握</h3>
-            <p>查看服务状态和启动项，搜索名称与命令，查询详情和日志。启停服务、调整启用状态，确认后执行。</p>
-            <ul class="chips"><li>launchd</li><li>Windows 服务</li><li>启动项</li></ul>
+            <p>默认只列第三方服务与启动项，异常的排在最前。按当前状态启动、停止、重启或禁用，系统级操作弹出授权，日志随手查看。</p>
+            <ul class="chips"><li>第三方优先</li><li>状态快捷键</li><li>登录项</li></ul>
             <a class="card-link" href="#preview" data-preview-view="services">查看服务管理 <span aria-hidden="true">→</span></a>
           </article>
         </div>
@@ -153,7 +153,7 @@
         <div class="safety-table" role="list">
           <div class="safety-row" role="listitem"><span class="row-no">01</span><h3>先扫描，后选择</h3><p>首页按 s 扫描清理工具，查看各项与合计空间。清理前列出条目，由你勾选并确认。</p><span class="row-tag">SCAN FIRST</span></div>
           <div class="safety-row" role="listitem"><span class="row-no">02</span><h3>谨慎的默认选项</h3><p>构建依赖、近期缓存和待核查条目默认不勾选。Agent 的会话、凭据和配置不在扫描范围内。</p><span class="row-tag">SAFE DEFAULT</span></div>
-          <div class="safety-row" role="listitem"><span class="row-no">03</span><h3>关键操作，当场确认</h3><p>清理、删除资源、结束进程和排空节点需要确认。Docker 与 Kubernetes 的日常操作用快捷键直接执行。</p><span class="row-tag">CONFIRM</span></div>
+          <div class="safety-row" role="listitem"><span class="row-no">03</span><h3>关键操作，当场确认</h3><p>清理、删除资源、移到废纸篓、结束进程、修改服务和排空节点需要确认。Docker 与 Kubernetes 的日常操作用快捷键直接执行。</p><span class="row-tag">CONFIRM</span></div>
           <div class="safety-row" role="listitem"><span class="row-no">04</span><h3>规则公开，源码可查</h3><p>清理范围和边界写在文档里，源码公开。你可以查看实现、提出问题，也可以参与改进。</p><span class="row-tag">OPEN SOURCE</span></div>
         </div>
         <p class="safety-quote"><span aria-hidden="true">▍</span>先看清楚，再动手。</p>
@@ -189,7 +189,7 @@
           <p class="section-description">没找到答案？到 <a href="https://github.com/KevinXC5/sysbox/issues">GitHub Issues</a> 提问。</p>
         </div>
         <div class="faq-list">
-          <details><summary>支持哪些系统？需要图形界面吗？<i aria-hidden="true"></i></summary><p>支持 macOS 与 Windows，提供 x86_64 和 ARM64 版本。sysbox 在终端中运行，Windows 建议使用 Windows Terminal。Docker 管理需要 Docker CLI 和运行中的引擎，Kubernetes 管理需要 kubectl 与集群访问权限。服务管理按当前用户权限执行，部分系统服务操作需要管理员权限。</p></details>
+          <details><summary>支持哪些系统？需要图形界面吗？<i aria-hidden="true"></i></summary><p>支持 macOS 与 Windows，提供 x86_64 和 ARM64 版本。sysbox 在终端中运行，Windows 建议使用 Windows Terminal。Docker 管理需要 Docker CLI 和运行中的引擎，Kubernetes 管理需要 kubectl 与集群访问权限。系统级服务的操作会弹出管理员授权。</p></details>
           <details><summary>清理会删掉我的配置和项目源码吗？<i aria-hidden="true"></i></summary><p>清理工具按各自规则筛选缓存与产物。JetBrains 清理不处理设置与插件目录；VS Code 的设置、备份与未知目录默认不勾选，但部分条目允许手动纳入。项目产物会检查对应项目文件和构建特征。请在确认前阅读所选条目与操作提示。<a href="https://github.com/KevinXC5/sysbox#功能">查看功能概览 ↗</a></p></details>
           <details><summary>可以只打开某一个工具吗？<i aria-hidden="true"></i></summary><p>可以。运行 sysbox devcache 打开开发缓存，sysbox docker 管理容器，sysbox processes 查看进程，sysbox network 诊断网络，sysbox disk 分析磁盘，sysbox services 管理服务与启动项。运行 sysbox list 查看全部工具名。</p></details>
           <details><summary>深色和浅色主题怎么切换？<i aria-hidden="true"></i></summary><p>默认跟随终端背景。按 t 在自动、浅色、深色之间切换，选择会被记住；也可以运行 sysbox --theme light，或在首页设置里修改。</p></details>

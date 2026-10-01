@@ -38,18 +38,18 @@ func Tools() []screens.Tool {
 			New:    screens.NewProcesses,
 		},
 		{
-			ID: "network", Group: "系统", Name: "网络诊断", Icon: iconNetwork, Desc: "查询 DNS、TCP、HTTP 与代理配置",
-			Detail: []string{"查询域名的 IPv4 与 IPv6 地址", "检测 TCP 连通性、HTTP 状态与 DNS、连接、TLS 和首字节耗时", "查看代理环境变量、系统代理配置与实际 HTTP 请求路径"},
+			ID: "network", Group: "系统", Name: "网络诊断", Icon: iconNetwork, Desc: "常用服务连通性、代理对比与本机网络",
+			Detail: []string{"打开即并发检测 GitHub、npm、PyPI、Docker Hub 等常用服务", "逐段显示 DNS、连接、TLS、HTTP 耗时，定位失败环节并给出建议", "对比系统代理与终端代理，一键复制终端代理设置命令", "查看网卡地址、默认网关与 DNS 服务器"},
 			New:    screens.NewNetwork,
 		},
 		{
 			ID: "disk", Group: "系统", Name: "磁盘分析", Icon: iconDisk, Desc: "目录占用、大文件与磁盘容量",
-			Detail: []string{"查看各磁盘容量，按占用排序浏览目录与前 50 个大文件", "进入目录逐层分析，打开文件所在目录", "已识别的缓存与构建产物可跳转到对应清理工具", "只读扫描，不跟随符号链接，读取失败时标记统计不完整"},
+			Detail: []string{"扫描一次即可逐层进入、返回上级与切换视图，无需重复扫描", "实时显示扫描进度，可随时停止并查看已统计的部分", "按占比条浏览目录与大文件，确认后移到废纸篓或回收站", "已识别的缓存与构建产物可跳转到对应清理工具"},
 			New:    screens.NewDisk,
 		},
 		{
-			ID: "services", Group: "系统", Name: "服务与启动项", Icon: iconServices, Desc: "查看服务、启动项与日志，快速启停",
-			Detail: []string{"macOS 管理 launchd 服务与第三方 LaunchAgents、LaunchDaemons", "Windows 管理系统服务、Run 注册表启动项，查看启动文件夹", "搜索服务、查看详情与日志，确认后启停及调整启用状态", "按当前用户权限执行；演练模式展示命令而不修改系统"},
+			ID: "services", Group: "系统", Name: "服务与启动项", Icon: iconServices, Desc: "第三方服务与启动项，按状态快速启停",
+			Detail: []string{"默认只列第三方项目，可切换运行中、异常、已禁用与全部视图", "按当前状态提供启动、停止、重启、启用或禁用，系统级操作弹出授权", "macOS 覆盖 launchd 服务、LaunchAgents、LaunchDaemons 与登录项", "Windows 覆盖服务、Run 注册表、启动文件夹与登录计划任务，禁用状态与任务管理器一致"},
 			New:    screens.NewServices,
 		},
 		cleanTool(screens.Tool{

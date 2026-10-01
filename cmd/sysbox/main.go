@@ -32,9 +32,9 @@ const usage = `sysbox —— 系统维护工具箱
   sysbox docker            管理 Docker 容器与镜像
   sysbox k8s               管理 Kubernetes 集群资源
   sysbox processes         管理本机进程与端口
-  sysbox network           诊断 DNS、TCP、HTTP 与代理
+  sysbox network           检测常用服务连通性，对比系统与终端代理
   sysbox disk              分析目录占用、大文件与磁盘容量
-  sysbox services          管理系统服务与启动项
+  sysbox services          管理第三方服务与启动项
   sysbox update            升级到最新版本
   sysbox uninstall         卸载 sysbox，默认保留配置文件
       --purge              同时删除配置目录

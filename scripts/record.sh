@@ -83,12 +83,13 @@ TAPE
     printf 'Sleep 1s\n'
     screenshot docker
     close_page
-    shot network network '查询耗时'
+    # 等待全部目标检测完成，状态栏显示条目数
+    shot network network '[0-9]+ . [0-9]+ 项'
     open_page disk '选择磁盘'
-    printf 'Type "g"\nCtrl+U\nType "."\nEnter\nWait+Screen@60s /扫描完成/\n'
+    printf 'Type "g"\nCtrl+U\nType "."\nEnter\nWait+Screen@60s /扫描于/\n'
     screenshot disk
     close_page
-    shot services services '范围：'
+    shot services services '共 [0-9]+ 项'
     if ! $website_only; then
       open_page '' '个工具'
       printf 'Type "s"\nWait+Screen@60s /共可释放/\nSleep 200ms\n'

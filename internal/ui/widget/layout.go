@@ -92,6 +92,10 @@ func Cell(text string, w int, style lipgloss.Style, right bool) string {
 		return ""
 	}
 	t := ansi.Truncate(text, w, "…")
+	// 部分等宽字体会把“.…”渲染成连字，导致整行少一列
+	if strings.HasSuffix(t, ".…") {
+		t = strings.TrimSuffix(t, ".…") + "…"
+	}
 	pad := strings.Repeat(" ", max(0, w-lipgloss.Width(t)))
 	if right {
 		return pad + style.Render(t)
