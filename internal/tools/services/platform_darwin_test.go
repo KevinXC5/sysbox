@@ -1,6 +1,11 @@
 package services
 
 import (
+	"context"
+	"errors"
+	"github.com/KevinXC5/sysbox/internal/sysx"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -32,5 +37,35 @@ func TestStartupActions(t *testing.T) {
 		if a.Key == "l" && a.Command.Name != "tail" {
 			t.Fatal("应优先读取配置日志")
 		}
+	}
+}
+
+func TestPlaceholderAndInvalidPlists(t *testing.T) {
+	for _, text := range []string{"{}", "{\n  \n}"} {
+		if _, err := decodePlist(text, "/tmp/placeholder.plist", "gui/501"); !errors.Is(err, errPlaceholderPlist) {
+			t.Fatalf("合法空字典应识别为占位文件：%v", err)
+		}
+	}
+	for _, text := range []string{`null`, `[]`, `{"Program":"/bin/sleep"}`, `{"Label":42}`} {
+		if _, err := decodePlist(text, "/tmp/invalid.plist", "gui/501"); err == nil || errors.Is(err, errPlaceholderPlist) {
+			t.Fatalf("无效配置应保留真实错误：%s，%v", text, err)
+		}
+	}
+}
+
+func TestPlutilEmptyPlaceholder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "com.example.old-updater.plist")
+	text := `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict/></plist>`
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := (sysx.ExecRunner{}).Run(context.Background(), sysx.C("plutil", "-convert", "json", "-o", "-", "--", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decodePlist(out, path, "gui/501"); !errors.Is(err, errPlaceholderPlist) {
+		t.Fatalf("真实 plutil 输出的占位文件不应报解析失败：%v", err)
 	}
 }

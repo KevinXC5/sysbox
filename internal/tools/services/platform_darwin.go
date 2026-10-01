@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/KevinXC5/sysbox/internal/sysx"
 )
+
+// 更新器可能保留合法的空字典作为旧启动项的占位文件。
+var errPlaceholderPlist = errors.New("空启动项占位文件")
 
 func (c *Client) list(ctx context.Context, startup bool) (Snapshot, error) {
 	userDomain := "gui/" + strconv.Itoa(os.Getuid())
@@ -72,12 +76,15 @@ func (c *Client) list(ctx context.Context, startup bool) (Snapshot, error) {
 				path := filepath.Join(root.path, entry.Name())
 				out, err := c.Runner.Run(ctx, sysx.C("plutil", "-convert", "json", "-o", "-", "--", path))
 				if err != nil {
-					warnings = append(warnings, entry.Name()+" 解析失败")
+					warnings = append(warnings, entry.Name()+" 读取失败："+err.Error())
 					continue
 				}
 				item, err := decodePlist(out, path, root.domain)
+				if errors.Is(err, errPlaceholderPlist) {
+					continue
+				}
 				if err != nil {
-					warnings = append(warnings, entry.Name()+" 解析失败")
+					warnings = append(warnings, entry.Name()+" 配置无效："+err.Error())
 					continue
 				}
 				if active, ok := loaded[item.ID]; ok {
@@ -159,6 +166,17 @@ func decodeDisabled(out string) map[string]bool {
 	return values
 }
 func decodePlist(out, path, domain string) (Item, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(out), &fields); err != nil {
+		return Item{}, err
+	}
+	if fields == nil {
+		return Item{}, fmt.Errorf("plist 根节点必须是字典")
+	}
+	// 空字典符合 plist 格式，但没有可展示、可操作的服务，静默跳过。
+	if len(fields) == 0 {
+		return Item{}, errPlaceholderPlist
+	}
 	var data struct {
 		Label, Program, StandardOutPath, StandardErrorPath string
 		ProgramArguments                                   []string
