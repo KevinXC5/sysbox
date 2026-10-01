@@ -282,9 +282,9 @@ func Explain(err error) string {
 		return "域名不存在或无法解析"
 	case errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout():
 		return "超时"
-	case strings.Contains(text, "connection refused"):
+	case strings.Contains(text, "connection refused") || strings.Contains(text, "actively refused"):
 		return "连接被拒绝（端口未监听）"
-	case strings.Contains(text, "connection reset"):
+	case strings.Contains(text, "connection reset") || strings.Contains(text, "forcibly closed"):
 		return "连接被重置"
 	case strings.Contains(text, "x509") || strings.Contains(text, "certificate"):
 		return "证书校验失败"
