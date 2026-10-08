@@ -43,6 +43,10 @@ type resourceTargetsMsg struct {
 	current string
 	err     error
 }
+type resourceNamespaceMsg struct {
+	namespace string
+	err       error
+}
 type resourceChoicesMsg struct {
 	choices []string
 	err     error
@@ -180,6 +184,21 @@ func (p *resourcePage) Hints() []string {
 		hints = append(hints, "space", "多选")
 	}
 	return append(hints, "esc", "返回")
+}
+
+// useTarget 在切换集群后调用：Kubernetes 需先读取该集群 kubeconfig 中的默认命名空间，再刷新列表。
+func (p *resourcePage) useTarget() tea.Cmd {
+	if !p.client.Kubernetes {
+		return p.reload()
+	}
+	p.busy, p.err = true, nil
+	client, ctx := *p.client, p.ctx
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		namespace, err := client.CurrentNamespace(ctx)
+		return resourceNamespaceMsg{namespace, err}
+	}
 }
 func (p *resourcePage) reload() tea.Cmd {
 	p.stopLogs()
@@ -340,6 +359,14 @@ func (p *resourcePage) Update(msg tea.Msg) tea.Cmd {
 			msg.current = msg.targets[0]
 		}
 		p.client.Target = msg.current
+		return p.useTarget()
+	case resourceNamespaceMsg:
+		// 读取失败时回退为 default，与 kubectl 的默认行为一致。
+		p.namespace = "default"
+		if msg.err == nil && msg.namespace != "" {
+			p.namespace = msg.namespace
+		}
+		p.resetList()
 		return p.reload()
 	case resourceLoadedMsg:
 		old, _ := p.current()
@@ -687,12 +714,12 @@ func (p *resourcePage) updatePicker(msg tea.KeyMsg) tea.Cmd {
 		}
 		if p.picker == "namespace" {
 			p.namespace = value
-		} else {
-			p.client.Target = value
-			p.namespace = "default"
+			p.resetList()
+			return p.reload()
 		}
+		p.client.Target = value
 		p.resetList()
-		return p.reload()
+		return p.useTarget()
 	}
 	var cmd tea.Cmd
 	p.input, cmd = p.input.Update(msg)

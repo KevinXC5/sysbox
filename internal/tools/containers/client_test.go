@@ -2,6 +2,7 @@ package containers
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -245,5 +246,25 @@ func TestImageUsagePinnedToActualImageID(t *testing.T) {
 	}
 	if len(runner.commands) != 3 || !strings.Contains(runner.commands[1].String(), "ancestor=sha256:current") {
 		t.Fatal("镜像关联查询应固定实际 ID")
+	}
+}
+func TestCurrentNamespaceFromKubeconfig(t *testing.T) {
+	runner := &recordingRunner{output: "payments\n"}
+	c := &Client{Kubernetes: true, Target: "production", Runner: runner}
+	namespace, err := c.CurrentNamespace(context.Background())
+	if err != nil || namespace != "payments" {
+		t.Fatalf("应读取 kubeconfig 中的默认命名空间：%q，%v", namespace, err)
+	}
+	want := []string{"--context", "production", "config", "view", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}"}
+	if got := runner.commands[0].Args; !reflect.DeepEqual(got, want) {
+		t.Fatalf("读取命名空间的参数错误：%v", got)
+	}
+	runner.output = "  \n"
+	if namespace, err := c.CurrentNamespace(context.Background()); err != nil || namespace != "default" {
+		t.Fatalf("未配置命名空间时应回退为 default：%q，%v", namespace, err)
+	}
+	runner.err = errors.New("boom")
+	if _, err := c.CurrentNamespace(context.Background()); err == nil {
+		t.Fatal("读取失败应返回错误")
 	}
 }

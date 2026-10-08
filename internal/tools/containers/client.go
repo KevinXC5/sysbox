@@ -84,6 +84,22 @@ func (c *Client) Namespaces(ctx context.Context) ([]string, error) {
 	}
 	return names, err
 }
+
+// CurrentNamespace 读取当前目标在 kubeconfig 中配置的默认命名空间；未配置时与 kubectl 保持一致，回退为 default。
+func (c *Client) CurrentNamespace(ctx context.Context) (string, error) {
+	args := []string{"config", "view", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}"}
+	if c.Target != "" {
+		args = append([]string{"--context", c.Target}, args...)
+	}
+	out, err := c.Runner.Run(ctx, sysx.C("kubectl", args...))
+	if err != nil {
+		return "", fmt.Errorf("读取默认命名空间失败：%w", err)
+	}
+	if namespace := strings.TrimSpace(out); namespace != "" {
+		return namespace, nil
+	}
+	return "default", nil
+}
 func (c *Client) List(ctx context.Context, kind, namespace string) ([]Item, error) {
 	if c.Kubernetes {
 		return c.kubeList(ctx, kind, namespace)
