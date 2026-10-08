@@ -59,13 +59,15 @@ jobs:
             url="https://github.com/$GITHUB_REPOSITORY/commits/$TAG"
           fi
 
-          commits=$(git log --reverse --no-merges --format='- %s%n%b' "$range")
+          # 排除官网、文档和截图的提交，只保留工具本身的改动
+          commits=$(git log --reverse --no-merges --format='- %s%n%b' "$range" -- . \
+            ':!website' ':!docs' ':!README.md' ':!CONTRIBUTING.md' ':!.github/workflows/pages.yml')
           prompt="下面是 sysbox（macOS 与 Windows 上的终端系统维护工具箱）自上一版本以来的 git 提交说明。
           请据此写一份面向用户的简体中文更新说明，使用 Markdown：
           - 开头用一句话概括本次更新的价值；
           - 再按实际内容分为“新增功能”“使用体验”“问题修复”“升级注意事项”等二级标题，没有内容的分类不写；
           - 条目说明用户在什么场景下会遇到什么变化，相关提交合并为一条，用平实的语言；
-          - 只写用户能感知的变化，测试、重构、CI、文档等内部改动不写；如果没有用户能感知的变化，只输出“本次为内部维护更新，功能无变化。”；
+          - 只写用户能感知的变化，测试、重构、CI、文档、官网等内部改动不写；如果没有用户能感知的变化，只输出“本次为内部维护更新，功能无变化。”；
           - 不写提交前缀、提交哈希和工作流标记，不要任何开场白或结束语，只输出更新说明本身。
 
           提交说明：
